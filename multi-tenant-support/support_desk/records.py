@@ -63,6 +63,26 @@ class TenantRecords:
             self._data["tickets"].append(ticket)
             return copy.deepcopy(ticket)
 
+    def add_comment(self, ticket_id: str, requester: str, comment: str) -> dict[str, Any] | None:
+        with self._lock:
+            for row in self._data["tickets"]:
+                if row["ticket_id"] == ticket_id and row["requester"] == requester:
+                    row.setdefault("comments", []).append({"from": "customer", "text": comment})
+                    if row["status"] == "pending_customer":
+                        row["status"] = "open"  # the customer answered: back to the agents
+                    return copy.deepcopy(row)
+        return None
+
+    def refund(self, order_id: str, customer: str, reason: str) -> dict[str, Any]:
+        """Record a refund that was approved. Callers check eligibility first."""
+        with self._lock:
+            for row in self._data["orders"]:
+                if row["order_id"] == order_id and row["customer"] == customer:
+                    row["status"] = "refunded"
+                    row["refund"] = {"amount_eur": row["total_eur"], "reason": reason}
+                    return copy.deepcopy(row)
+        raise KeyError(order_id)
+
 
 class TicketDesk:
     """All tenants' records, loaded from ``data/records/<tenant>.json``."""

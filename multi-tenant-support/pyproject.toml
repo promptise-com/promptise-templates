@@ -2,10 +2,11 @@
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+markers = ["live: calls a real model provider (needs an API key; skipped without one)"]
 
 [tool.ruff]
 line-length = 110
-extend-exclude = [".venv"]
+extend-exclude = [".venv", "*.md"]  # guide excerpts keep their file indentation
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]

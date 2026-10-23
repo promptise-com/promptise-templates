@@ -1,13 +1,16 @@
 name = "multi-tenant-support"
-version = "0.1.0"
+version = "0.2.0"
 description = "One support agent for many customer companies, with per-tenant data, memory, permissions and quotas"
 main = "main.py"
 
 [scripts]
-demo = "python main.py --offline"   # offline, no API key
-dev = "promptise run --devtools"     # real model, with live traces
-backend = "python -m support_desk.backend"
-test = "pytest -q"
+demo = "promptise run main.py"                     # the full demo with a real model
+dev = "promptise run --devtools main.py"           # the same, with live traces in the dev tools
+ask = "promptise run main.py --as"                 # promptise run ask acme/alice "Where is my order AC-5001?"
+demo-offline = "promptise run main.py --offline"   # no API key yet: scripted model
+backend = "python -m support_desk.backend"         # the backend as its own service
+test = "pytest -q -m 'not live'"                   # offline tests
+test-live = "pytest -q -m live"                    # one real end-to-end run (needs a model key)
 
 [env]
 files = [".env"]

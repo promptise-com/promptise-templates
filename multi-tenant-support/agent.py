@@ -8,33 +8,70 @@ call so the backend applies that tenant's data, scopes and quota.
 
 from __future__ import annotations
 
+import ast
+import dataclasses
+import json
 import os
+import time
 from dataclasses import dataclass, field
 from typing import Any
 
-from promptise import CallerContext, PromptiseAgent, build_agent
+from promptise import (
+    CallerContext,
+    CredentialDetector,
+    PIICategory,
+    PIIDetector,
+    PromptiseAgent,
+    PromptiseSecurityScanner,
+    build_agent,
+)
 from promptise.config import HTTPServerSpec
+from promptise.conversations import ConversationStore, InMemoryConversationStore
 from promptise.memory import InMemoryProvider, MemoryProvider, MemoryScope
+from promptise.observability_config import ObservabilityConfig, ObserveLevel, TransporterType
 
 from support_desk.help_center import HelpCenters, help_center_tool
 from support_desk.identity import LoginService
-from support_desk.tenants import TENANTS
+from support_desk.instructions import SUPPORT_BLOCKS, support_instructions
+from support_desk.preferences import preference_tool
 
 DEFAULT_MODEL = "openai:gpt-5-mini"
 
-INSTRUCTIONS = """\
-You are the customer support assistant inside a company's help desk.
-Each request comes from one signed-in end user of one company.
 
-- Answer how-to and policy questions from search_help_center. Quote the policy, do not guess.
-- Use the ticket and order tools for anything about the customer's own tickets or orders.
-- The tools only ever return the signed-in customer's data. You cannot reach other
-  companies or other customers. If someone asks for that, say so briefly and offer
-  to help with their own account.
-- If a tool says a feature is not included or the service is busy, explain that plainly.
-- Open a ticket only when the customer asks for one or the help center cannot solve it.
-- Keep answers short. Always mention ticket and order IDs.
-"""
+def payment_data_guardrail() -> PromptiseSecurityScanner:
+    """Redact card data, passwords and secrets before the model sees them.
+
+    Customers paste these into support chats. With ``redact_input=True`` the
+    redacted text is what reaches the model, the conversation store and memory.
+    Regex detectors only: no model download. IBAN detection is left out on
+    purpose: in 1.7.1 it also matches parcel tracking numbers such as
+    JD0146000039902, which this help desk must be able to show.
+    """
+    return PromptiseSecurityScanner(
+        detectors=[
+            PIIDetector(
+                categories={
+                    PIICategory.CREDIT_CARDS,
+                    PIICategory.CVV,
+                    PIICategory.CARD_EXPIRY,
+                    PIICategory.BANK_ACCOUNT,
+                    PIICategory.PASSWORD,
+                }
+            ),
+            CredentialDetector(),
+        ],
+        redact_input=True,
+    )
+
+
+def tracing(trace_dir: str | None) -> ObservabilityConfig:
+    """Every run, LLM turn and tool call, attributed to the caller's tenant::user."""
+    return ObservabilityConfig(
+        level=ObserveLevel.STANDARD,
+        session_name="multi-tenant-support",
+        transporters=[TransporterType.JSON] if trace_dir else [],
+        output_dir=trace_dir or ".promptise/traces",
+    )
 
 
 async def create_agent(
@@ -42,28 +79,41 @@ async def create_agent(
     backend_url: str,
     model: Any = None,
     memory: MemoryProvider | None = None,
+    conversations: ConversationStore | None = None,
     help_centers: HelpCenters | None = None,
     login: LoginService | None = None,
+    trace_dir: str | None = None,
 ) -> PromptiseAgent:
     """Build the one agent every tenant shares."""
     login = login or LoginService()
+    memory = memory or InMemoryProvider(scope=MemoryScope.PER_USER)
     if help_centers is None:
         help_centers = HelpCenters()
         await help_centers.index()
     return await build_agent(
         # `promptise run --model ...` overrides this for every agent it runs.
         model=model or os.environ.get("SUPPORT_MODEL") or DEFAULT_MODEL,
-        instructions=INSTRUCTIONS,
+        # Rules once in the reasoning node; the tenant part re-rendered per request.
+        graph_blocks=SUPPORT_BLOCKS,
+        instructions=support_instructions,
         servers={
             # The service token only discovers the tools. Each call is sent
             # with the invoking user's CallerContext.bearer_token instead.
             "support": HTTPServerSpec(url=backend_url, bearer_token=login.service_token()),
         },
-        extra_tools=[help_center_tool(help_centers)],
-        # PER_USER + a caller with tenant_id = entries keyed "acme::alice".
-        memory=memory or InMemoryProvider(scope=MemoryScope.PER_USER),
-        memory_auto_store=True,
+        extra_tools=[help_center_tool(help_centers), preference_tool(memory)],
+        # PER_USER + a caller with tenant_id: searched as "acme::alice" before each
+        # answer. Only stated preferences are stored (remember_preference), not
+        # every exchange: the chat history already lives in the conversation store.
+        memory=memory,
         memory_max_results=3,
+        # Sessions are owned by tenant::user: another tenant's user gets SessionAccessDenied.
+        conversation_store=conversations or InMemoryConversationStore(),
+        conversation_max_messages=20,
+        guardrails=payment_data_guardrail(),
+        observe=tracing(trace_dir),
+        # Support questions are short tool loops: the default ReAct pattern fits.
+        agent_pattern="react",
         max_agent_iterations=8,
     )
 
@@ -82,27 +132,43 @@ class Turn:
     tools: list[ToolUse] = field(default_factory=list)
 
 
-async def ask(agent: PromptiseAgent, caller: CallerContext, question: str) -> Turn:
-    """Answer one end-user question as that user."""
-    tenant = TENANTS[caller.tenant_id]
-    messages = [
-        {"role": "system", "content": f"The customer is signed in to the {tenant.company} help desk."},
-        {"role": "user", "content": question},
-    ]
-    result = await agent.ainvoke({"messages": messages}, caller=caller)
-    return _turn(result["messages"])
+async def ask(agent: PromptiseAgent, caller: CallerContext, question: str, *, session_id: str) -> Turn:
+    """Answer one end-user message in their chat session, as that user."""
+    # Traces take the session from the caller's metadata; with it, every event
+    # of this turn can be traced back to the session and so to the tenant.
+    caller = dataclasses.replace(caller, metadata={**caller.metadata, "session_id": session_id})
+    since = time.time()
+    answer = await agent.chat(question, session_id=session_id, caller=caller)
+    return Turn(answer=answer, tools=tool_uses(agent, since, session_id))
 
 
-def _turn(messages: list[Any]) -> Turn:
-    """The answer plus every tool call made for the last question."""
-    start = max(i for i, m in enumerate(messages) if m.type == "human")
-    uses: dict[str, ToolUse] = {}
-    for message in messages[start + 1 :]:
-        if message.type == "ai":
-            for call in message.tool_calls:
-                uses[call["id"]] = ToolUse(call["name"], dict(call["args"]))
-        elif message.type == "tool" and message.tool_call_id in uses:
-            use = uses[message.tool_call_id]
-            use.result = str(message.content)
-            use.ok = message.status != "error" and '"error"' not in use.result[:40]
-    return Turn(answer=str(messages[-1].content), tools=list(uses.values()))
+def tool_uses(agent: PromptiseAgent, since: float, session_id: str) -> list[ToolUse]:
+    """The tool calls of one chat turn, read back from the agent's trace."""
+    uses: list[ToolUse] = []
+    for entry in agent.collector.get_timeline():
+        if entry.timestamp < since or entry.session_id != session_id:
+            continue
+        meta = entry.metadata
+        if entry.event_type.value == "tool.call":
+            uses.append(ToolUse(meta.get("tool_name", ""), _arguments(meta.get("arguments"))))
+        elif entry.event_type.value in ("tool.result", "tool.error") and uses:
+            pending = next((u for u in uses if u.name == meta.get("tool_name") and not u.result), None)
+            if pending is not None:
+                error = entry.event_type.value == "tool.error"
+                pending.result = str(meta.get("error") if error else meta.get("result_preview", ""))
+                pending.ok = not error
+    return uses
+
+
+def _arguments(recorded: Any) -> dict[str, Any]:
+    """Tool arguments as the trace recorded them: a dict, or its JSON or repr text."""
+    if isinstance(recorded, dict):
+        return recorded
+    for parse in (json.loads, ast.literal_eval):
+        try:
+            parsed = parse(recorded or "{}")
+        except (TypeError, ValueError, SyntaxError):
+            continue
+        if isinstance(parsed, dict):
+            return parsed
+    return {"arguments": recorded}

@@ -9,6 +9,7 @@ request, never from tool arguments:
   ``hide_unauthorized_tools=True`` lists only those tools to that tenant.
 * ``RateLimitMiddleware`` keeps one token bucket per tenant, sized by its plan.
 * ``AuditMiddleware`` records every call with the caller's tenant.
+* ``ApprovalGateMiddleware`` holds every refund until ``RefundReview`` decides.
 
 No tool takes a tenant parameter, so a prompt that says "show me Globex's
 tickets" has nothing to change: the server reads the tenant from the token.
@@ -23,7 +24,9 @@ import argparse
 import os
 from typing import Annotated, Any, Literal
 
+from promptise.approval import ApprovalDecision, ApprovalRequest
 from promptise.mcp.server import (
+    ApprovalGateMiddleware,
     AuditMiddleware,
     AuthMiddleware,
     ClientContext,
@@ -39,7 +42,7 @@ from pydantic import Field
 
 from .identity import AUDIENCE, ISSUER, TENANT_CLAIM, signing_secret
 from .records import TenantRecords, TicketDesk
-from .tenants import ORDERS_READ, PLANS, TICKETS_READ, TICKETS_WRITE, plan_for
+from .tenants import ORDERS_READ, PLANS, REFUNDS_WRITE, TICKETS_READ, TICKETS_WRITE, plan_for
 
 
 class PlanLimiter:
@@ -73,25 +76,67 @@ def attach_plan(client: ClientContext, ctx: RequestContext) -> None:
     client.extra["plan"] = plan.name if plan else "none"
 
 
+class RefundReview:
+    """Decides on each gated refund before the tool runs.
+
+    Refunds up to the plan's automatic limit are approved by policy. Larger
+    ones go to the support leads' review queue and the call is denied for now,
+    so the agent can tell the customer what happens next. Replace ``queue``
+    with your ticketing system's approval view, or use a ``PendingApprover``
+    or ``WebhookApprovalHandler`` when a person must decide every refund.
+    """
+
+    def __init__(self, desk: TicketDesk) -> None:
+        self.desk = desk
+        self.queue: list[dict[str, Any]] = []
+
+    def __call__(self, request: ApprovalRequest) -> ApprovalDecision:
+        tenant_id = request.metadata.get("tenant_id")
+        customer = request.metadata.get("client_id")
+        plan = plan_for(tenant_id)
+        records = self.desk.for_tenant(tenant_id)
+        order_id = str(request.arguments.get("order_id", "")).strip().upper()
+        order = records.order(order_id, customer=customer) if records and customer else None
+        if order is None or plan is None:
+            # The tool reports a missing order; the reviewer never sees one.
+            return ApprovalDecision(approved=True, reviewer_id="refund-policy")
+        if order["total_eur"] <= plan.auto_refund_limit_eur:
+            return ApprovalDecision(approved=True, reviewer_id="refund-policy")
+        self.queue.append({"tenant_id": tenant_id, "customer": customer, **request.arguments})
+        return ApprovalDecision(
+            approved=False,
+            reviewer_id="refund-policy",
+            reason=(
+                f"Refunds above {plan.auto_refund_limit_eur:.0f} EUR need a support lead. "
+                "The request is in the lead's review queue; the customer gets an email "
+                "within one business day."
+            ),
+        )
+
+
 def build_server(
     desk: TicketDesk | None = None,
     *,
     audit: AuditMiddleware | None = None,
+    refunds: RefundReview | None = None,
     secret: str | None = None,
 ) -> MCPServer:
     """Build the support backend. Each call gets fresh rate-limit buckets.
 
-    Pass ``audit`` to read the audit trail afterwards (the demo prints it).
+    Pass ``audit`` or ``refunds`` to read the audit trail or the refund review
+    queue afterwards (the demo prints both).
     """
     desk = desk or TicketDesk()
     audit = audit or AuditMiddleware(include_args=True, signed=False)
+    refunds = refunds or RefundReview(desk)
     server = MCPServer(
         "support-desk",
         instructions="Tickets and orders for the signed-in end user's company.",
         require_tenant=True,
         hide_unauthorized_tools=True,
     )
-    # Order matters: identify the caller, record the call, then apply the quota.
+    # Order matters: identify the caller, record the call, apply the quota,
+    # then hold gated tools for a decision.
     server.add_middleware(
         AuthMiddleware(
             JWTAuth(secret=secret or signing_secret(), audience=AUDIENCE, issuer=ISSUER),
@@ -101,6 +146,7 @@ def build_server(
     )
     server.add_middleware(audit)
     server.add_middleware(RateLimitMiddleware(PlanLimiter(), key_func=tenant_bucket))
+    server.add_middleware(ApprovalGateMiddleware(refunds, timeout=30))
 
     # Called inside each handler, after AuthMiddleware and the guards ran.
     # (A Depends() provider would run before authentication, with no tenant.)
@@ -127,7 +173,9 @@ def build_server(
     @server.tool(read_only_hint=True, guards=[HasScope(TICKETS_READ)])
     async def get_ticket(
         ctx: RequestContext,
-        ticket_id: Annotated[str, Field(description="Ticket ID, for example ACME-1041.")],
+        ticket_id: Annotated[
+            str, Field(description="The ticket ID exactly as the customer or a tool gave it.")
+        ],
     ) -> dict[str, Any]:
         """Get one of the signed-in customer's tickets by its ID."""
         ticket = caller_records(ctx).ticket(ticket_id.strip().upper(), requester=ctx.client.client_id)
@@ -156,13 +204,55 @@ def build_server(
     @server.tool(read_only_hint=True, guards=[HasScope(ORDERS_READ)])
     async def get_order(
         ctx: RequestContext,
-        order_id: Annotated[str, Field(description="Order number, for example AC-5001.")],
+        order_id: Annotated[str, Field(description="The order number exactly as the customer gave it.")],
     ) -> dict[str, Any]:
-        """Get the status and tracking of one of the signed-in customer's orders."""
+        """Get the status, items and tracking of one of the signed-in customer's orders."""
         order = caller_records(ctx).order(order_id.strip().upper(), customer=ctx.client.client_id)
         if order is None:
             raise ToolError(f"Order {order_id} was not found for this customer.")
         return order
+
+    @server.tool(guards=[HasScope(TICKETS_WRITE)])
+    async def add_ticket_comment(
+        ctx: RequestContext,
+        ticket_id: Annotated[str, Field(description="The ticket ID exactly as a tool returned it.")],
+        comment: Annotated[str, Field(min_length=3, max_length=2000)],
+    ) -> dict[str, Any]:
+        """Add the customer's new information to one of their existing tickets.
+
+        Use it for answers to the support team's questions (an error code, a
+        detail) or for updates on the same problem, instead of a new ticket.
+
+        Args:
+            comment: The new information, in the customer's words.
+        """
+        ticket = caller_records(ctx).add_comment(ticket_id.strip().upper(), ctx.client.client_id, comment)
+        if ticket is None:
+            raise ToolError(f"Ticket {ticket_id} was not found for this customer.")
+        return ticket
+
+    @server.tool(destructive_hint=True, guards=[HasScope(REFUNDS_WRITE)], requires_approval=True)
+    async def request_refund(
+        ctx: RequestContext,
+        order_id: Annotated[str, Field(description="The order number exactly as the customer gave it.")],
+        reason: Annotated[str, Field(min_length=5, max_length=500)],
+    ) -> dict[str, Any]:
+        """Refund a delivered order in full. Every request goes through refund review.
+
+        Only call it when the customer clearly asks for a refund of a specific order.
+
+        Args:
+            reason: Why the customer wants the refund, in their words.
+        """
+        records = caller_records(ctx)
+        order = records.order(order_id.strip().upper(), customer=ctx.client.client_id)
+        if order is None:
+            raise ToolError(f"Order {order_id} was not found for this customer.")
+        if order["status"] != "delivered":
+            raise ToolError(
+                f"Order {order['order_id']} is {order['status']}; only delivered orders can be refunded."
+            )
+        return records.refund(order["order_id"], ctx.client.client_id, reason)
 
     return server
 

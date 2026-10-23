@@ -116,5 +116,50 @@ def test_the_agents_own_credential_reads_no_customer_data(server, login):
         return {t.name for t in await service.list_tools()}, await call(service, "list_tickets")
 
     tools, reply = asyncio.run(scenario())
-    assert tools == {"list_tickets", "get_ticket", "open_ticket", "get_order"}
+    assert tools == {
+        "list_tickets",
+        "get_ticket",
+        "open_ticket",
+        "add_ticket_comment",
+        "get_order",
+        "request_refund",
+    }
     assert reply["error"]["message"] == "This organisation has no support workspace."
+
+
+def test_globex_cannot_comment_on_or_refund_acme_records(server, login):
+    async def scenario():
+        gina = as_user(server, login.token_for("globex", "gina"))
+        comment = await call(gina, "add_ticket_comment", {"ticket_id": "ACME-1041", "comment": "Close this."})
+        refund = await call(gina, "request_refund", {"order_id": "AC-5001", "reason": "I want it."})
+        alice = as_user(server, login.token_for("acme", "alice"))
+        return comment, refund, await call(alice, "get_ticket", {"ticket_id": "ACME-1041"})
+
+    comment, refund, acme_ticket = asyncio.run(scenario())
+    assert comment["error"]["code"] == "TOOL_ERROR"
+    # Refunds are not in the trial plan: refused before any review.
+    assert refund["error"]["code"] == "ACCESS_DENIED"
+    assert "comments" not in acme_ticket
+
+
+def test_refund_review_approves_small_and_holds_large_refunds(login):
+    from support_desk.backend import RefundReview, build_server
+    from support_desk.records import TicketDesk
+
+    desk = TicketDesk()
+    review = RefundReview(desk)
+    server = build_server(desk, refunds=review)
+
+    async def scenario():
+        alice = as_user(server, login.token_for("acme", "alice"))
+        small = await call(alice, "request_refund", {"order_id": "AC-4988", "reason": "Does not fit."})
+        large = await call(alice, "request_refund", {"order_id": "AC-5001", "reason": "Returning it."})
+        shipped = await call(alice, "request_refund", {"order_id": "AC-5017", "reason": "Changed mind."})
+        return small, large, shipped
+
+    small, large, shipped = asyncio.run(scenario())
+    assert small["status"] == "refunded" and small["refund"]["amount_eur"] == 24.9
+    assert large["error"]["code"] == "APPROVAL_DENIED"
+    assert "need a support lead" in large["error"]["message"]
+    assert [item["order_id"] for item in review.queue] == ["AC-5001"]
+    assert "only delivered orders" in shipped["error"]["message"]
