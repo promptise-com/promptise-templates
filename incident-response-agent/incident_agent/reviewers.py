@@ -54,15 +54,23 @@ class TerminalReviewer:
         while True:
             request = await self.handler.request_queue.get()
             print(f"\n{describe(request)}", flush=True)
-            answer = await asyncio.to_thread(input, "Approve? [y/N] ")
+            answer = await self._ask("Approve? [y/N] ")
             if answer.strip().lower() in {"y", "yes"}:
                 decision = ApprovalDecision(approved=True, reviewer_id=self.reviewer_id)
             else:
-                reason = await asyncio.to_thread(input, "Reason (shown to the agent): ")
+                reason = await self._ask("Reason (shown to the agent): ")
                 decision = ApprovalDecision(
                     approved=False, reviewer_id=self.reviewer_id, reason=reason.strip() or "Denied by on-call."
                 )
+            print(f"\n-> {'approved' if decision.approved else 'denied'} by {self.reviewer_id}", flush=True)
             try:
                 self.handler.submit_decision(request.request_id, decision)
             except KeyError:
                 print("Too late: the request timed out and was denied.", flush=True)
+
+    @staticmethod
+    async def _ask(prompt: str) -> str:
+        try:
+            return await asyncio.to_thread(input, prompt)
+        except EOFError:
+            return ""  # no terminal attached: treat as "no", never as "yes"

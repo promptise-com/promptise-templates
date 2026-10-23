@@ -1,8 +1,8 @@
-"""Shared test helpers: run one alert through the real process, offline.
+"""Shared test helpers: run alerts through the real application.
 
-Each test gets its own state directory, webhook port and secret. The model
-is a ScriptedModel, so no test needs an API key or the network beyond
-127.0.0.1.
+Each test gets its own state directory, webhook port, webhook secret and ops
+MCP server (a separate HTTP process with its own API keys). Offline tests
+use a ScriptedModel; the ``live`` test uses a real model.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from typing import Any
 import pytest
 
 from incident_agent.alerts import post_alert, sample_alert
-from incident_agent.config import WEBHOOK_PATH, create_process
+from incident_agent.app import running_agent
 from incident_agent.runner import free_port, wait_for_runs
 from incident_agent.trace import IncidentTrace
 from ops_systems.store import OpsWorld
@@ -27,7 +27,7 @@ from ops_systems.store import OpsWorld
 @dataclass
 class IncidentRun:
     state_dir: Path
-    trace: IncidentTrace
+    trace: IncidentTrace | None
     model: Any
     reviewer: Any
     responses: list[tuple[int, dict]] = field(default_factory=list)
@@ -39,8 +39,13 @@ class IncidentRun:
 
     @property
     def audit(self) -> list[dict]:
-        """What the ops MCP server itself recorded: one entry per tool call it executed."""
+        """What the ops MCP server itself recorded: one entry per tool call it received."""
         path = self.state_dir / "ops-audit.jsonl"
+        return [json.loads(line) for line in path.read_text().splitlines()] if path.exists() else []
+
+    @property
+    def journal(self) -> list[dict]:
+        path = self.state_dir / "journal" / "incident-agent.jsonl"
         return [json.loads(line) for line in path.read_text().splitlines()] if path.exists() else []
 
     def tool_messages(self, tool: str) -> list[str]:
@@ -81,34 +86,32 @@ def run_incident(
     expect_runs: int = 1,
     sign_with: str | None = None,
     approval_timeout: float = 30,
+    run_timeout: float = 60,
     serve_reviewer: Callable[[], Awaitable[None]] | None = None,
 ) -> IncidentRun:
-    """Start the process, POST the alert(s) to its webhook, wait for the runs, stop."""
-    trace = IncidentTrace(state_dir / "traces")
+    """Start the application, POST the alert(s) to its webhook, wait for the runs, stop."""
     secret = secrets.token_hex(16)
-    port = free_port()
-    run = IncidentRun(state_dir=state_dir, trace=trace, model=model, reviewer=reviewer)
+    run = IncidentRun(state_dir=state_dir, trace=None, model=model, reviewer=reviewer)
 
     async def go() -> None:
-        process = create_process(
+        async with running_agent(
             model=model,
             reviewer=reviewer,
             state_dir=state_dir,
-            trace=trace,
             webhook_secret=secret,
-            webhook_port=port,
+            webhook_port=free_port(),
             approval_timeout=approval_timeout,
-        )
-        async with process:
+        ) as agent:
+            run.trace = agent.trace
             reviewer_task = asyncio.create_task(serve_reviewer()) if serve_reviewer else None
-            url = f"http://127.0.0.1:{port}{WEBHOOK_PATH}"
             for payload in payloads or [sample_alert(anchor(state_dir))]:
-                run.responses.append(await asyncio.to_thread(post_alert, url, payload, sign_with or secret))
+                answer = await asyncio.to_thread(post_alert, agent.webhook_url, payload, sign_with or secret)
+                run.responses.append(answer)
             if expect_runs:
-                await wait_for_runs(process, expect_runs, timeout=60)
+                await wait_for_runs(agent.process, expect_runs, timeout=run_timeout)
             else:
                 await asyncio.sleep(0.5)  # time for a run that should not happen
-            run.status = process.status()
+            run.status = agent.process.status()
             if reviewer_task is not None:
                 reviewer_task.cancel()
 

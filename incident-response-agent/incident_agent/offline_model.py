@@ -38,7 +38,10 @@ def _investigation() -> list:
                 "fingerprint": SAMPLE_FINGERPRINT,
             },
         ),
-        ToolCall("find_runbook", {"alert_name": "HighErrorRate"}),
+        [
+            ToolCall("recall_past_incidents", {"service": SERVICE, "query": "deploy error rate"}),
+            ToolCall("find_runbook", {"alert_name": "HighErrorRate"}),
+        ],
         # Independent reads go out in one turn; the agent runs them in parallel.
         [
             ToolCall("search_logs", {"service": SERVICE, "minutes": 30, "level": "ERROR"}),
@@ -46,8 +49,9 @@ def _investigation() -> list:
             ToolCall("query_metric", {"service": SERVICE, "metric": "latency_p95_ms", "minutes": 30}),
             ToolCall("list_deploys", {"service": SERVICE, "hours": 24}),
         ],
-        # Runbook step 5: is the dependency itself unhealthy?
+        # Runbook steps 4 and 5: config changes at the deploy, and the dependency's health.
         [
+            ToolCall("search_logs", {"service": SERVICE, "minutes": 16, "level": "INFO"}),
             ToolCall("query_metric", {"service": "payments-api", "metric": "error_rate", "minutes": 30}),
             ToolCall("query_metric", {"service": "payments-api", "metric": "latency_p95_ms", "minutes": 30}),
         ],
@@ -59,7 +63,8 @@ def _investigation() -> list:
                     "Investigating. checkout-service 5xx rate is 11.8% (baseline 0.4%) and p95 is 930 ms. "
                     "Errors are timeouts to payments-api /v2/authorize after 800 ms. They began 1 minute after "
                     "deploy v2.14.0, which lowered PAYMENTS_TIMEOUT_MS from 3000 to 800. payments-api is healthy "
-                    "(0.2% errors, p95 1450 ms). Runbook says: roll back. Asking on-call for approval."
+                    "(0.2% errors, p95 1450 ms). Same pattern as INC-0987 (a config default changed in a deploy). "
+                    "Runbook Mitigate, first condition: roll back to v2.13.4. Asking on-call for approval."
                 ),
             },
         ),
@@ -77,6 +82,7 @@ def _investigation() -> list:
 def _findings(anchor: datetime) -> list[dict[str, str]]:
     return [
         {"time": _at(anchor, 15), "event": "Deploy v2.14.0 of checkout-service finished (commit 9f3c2ab)"},
+        {"time": _at(anchor, 15), "event": "v2.14.0 started with PAYMENTS_TIMEOUT_MS=800 (previous default 3000)"},
         {"time": _at(anchor, 14), "event": "First payments-api timeout after 800 ms in checkout-service logs"},
     ]
 
@@ -114,6 +120,7 @@ def approved_run(anchor: datetime) -> ScriptedModel:
                     "findings": _findings(anchor),
                     "follow_ups": [
                         "payments team: set PAYMENTS_TIMEOUT_MS explicitly to 3000 before redeploying v2.14.x",
+                        "Second config-default regression after INC-0987: diff effective config in the deploy pipeline",
                         "Add a canary step that watches checkout error rate for 10 minutes",
                     ],
                 },

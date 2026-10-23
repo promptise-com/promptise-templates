@@ -5,12 +5,14 @@ main = "main.py"
 python_path = ["."]
 
 [scripts]
-demo = "promptise run demo.py"
-demo-deny = "promptise run demo.py -- --deny"
-demo-trace = "promptise run --devtools demo.py"
+start = "promptise run main.py"
+dev = "promptise run --devtools main.py"
 alert = "promptise run scripts/fire_alert.py"
-dev = "promptise run --devtools"
+alert-resolved = "promptise run scripts/fire_alert.py -- --resolved"
 test = "pytest -q"
+test-live = "pytest -q -m live"
+demo-offline = "promptise run demo.py"
+demo-offline-deny = "promptise run demo.py -- --deny"
 
 [env]
 files = [".env"]

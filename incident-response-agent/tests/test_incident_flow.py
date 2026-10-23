@@ -54,9 +54,9 @@ def test_alert_wakes_the_agent_and_it_reads_the_alerting_services_logs(world_dir
 
     # It asked for checkout-service logs, and the ops server served exactly that.
     log_calls = [e for e in run.audit if e["tool"] == "search_logs"]
-    assert [e["args"]["service"] for e in log_calls] == ["checkout-service"]
-    [logs] = run.tool_messages("search_logs")
-    result = json.loads(logs)
+    assert {e["args"]["service"] for e in log_calls} == {"checkout-service"}
+    assert {e["client_id"] for e in log_calls} == {"incident-agent"}
+    result = json.loads(run.tool_messages("search_logs")[0])
     assert result["service"] == "checkout-service"
     assert {line["service"] for line in result["lines"]} == {"checkout-service"}
     assert "PaymentGatewayClient: TimeoutError" in result["top_messages"][0]["message"]
@@ -199,10 +199,11 @@ def test_trace_contains_every_tool_call(world_dir):
 
     # Every call the model made is in the trace, with its arguments ...
     assert canonical(traced) == canonical(scripted_tool_calls(model))
-    # ... and matches what the ops server says it executed.
+    # ... and every MCP call matches what the ops server says it executed (memory is a local tool).
     audited = [{"tool": e["tool"], "arguments": e["args"]} for e in run.audit]
-    assert sorted(c["tool"] for c in traced) == sorted(c["tool"] for c in audited)
-    for call in traced:
+    remote = [c for c in traced if c["tool"] != "recall_past_incidents"]
+    assert sorted(c["tool"] for c in remote) == sorted(c["tool"] for c in audited)
+    for call in remote:
         # The audit log writes nested models as text, so match on the scalar arguments.
         scalars = {k: v for k, v in call["arguments"].items() if isinstance(v, (str, int, float, bool))}
         assert any(a["tool"] == call["tool"] and scalars.items() <= a["arguments"].items() for a in audited)
@@ -250,3 +251,76 @@ def test_a_repeated_alert_reuses_the_open_incident(world_dir):
     assert list(run.world["incidents"]) == ["INC-1042"]
     second = json.loads(run.tool_messages("open_incident")[-1])
     assert second["already_open"] is True
+
+
+# ── the runtime's record, budget and memory ───────────────────────────────
+
+
+def test_the_journal_shows_the_webhook_event_that_started_the_run(world_dir):
+    run = run_incident(world_dir, approved_run(anchor(world_dir)), AutoReviewer(approve=True))
+    event_id = run.responses[0][1]["event_id"]
+
+    kinds = [(e["entry_type"], e["data"].get("event_id")) for e in run.journal]
+    assert ("trigger_event", event_id) in kinds
+    assert ("invocation_start", event_id) in kinds
+    assert ("invocation_result", event_id) in kinds
+    [trigger] = [e for e in run.journal if e["entry_type"] == "trigger_event"]
+    assert trigger["data"]["trigger_type"] == "webhook"
+    assert trigger["data"]["payload"]["commonLabels"]["service"] == "checkout-service"
+    journaled_tools = [e["data"]["tool"] for e in run.journal if e["entry_type"] == "tool_call"]
+    assert "rollback_deploy" in journaled_tools
+
+
+def test_budget_allows_one_production_change_per_alert(world_dir):
+    reviewer = AutoReviewer(approve=True)
+    model = ScriptedModel(
+        [
+            ToolCall(
+                "rollback_deploy",
+                {"service": "checkout-service", "to_version": "v2.13.4", "reason": "Deploy correlates."},
+            ),
+            ToolCall("restart_service", {"service": "checkout-service", "reason": "And a restart, to be sure."}),
+            "done",
+        ]
+    )
+    run = run_incident(world_dir, model, reviewer)
+
+    # The second change never reached the reviewer or production.
+    assert [r.tool_name for r in reviewer.requests] == ["rollback_deploy"]
+    assert [a["action"] for a in run.world["actions"]] == ["rollback"]
+    assert "max_irreversible_per_run" in run.tool_messages("restart_service")[0]
+    # The process paused itself until a person looks.
+    assert run.status["state"] == "suspended"
+    assert run.status["suspend_reason"] == "budget"
+
+
+def test_past_incidents_are_recalled_per_service(world_dir):
+    model = ScriptedModel(
+        [
+            [
+                ToolCall("recall_past_incidents", {"service": "checkout-service"}),
+                ToolCall("recall_past_incidents", {"service": "cart-service"}),
+            ],
+            "done",
+        ]
+    )
+    run = run_incident(world_dir, model, AutoReviewer())
+    checkout, cart = (json.loads(m) for m in run.tool_messages("recall_past_incidents"))
+
+    assert {e["incident"].split(" ")[0] for e in checkout} == {"INC-0987", "INC-0912"}
+    assert [e["incident"].split(" ")[0] for e in cart] == ["INC-1001"]
+
+
+def test_a_finished_incident_is_remembered_for_the_next_alert(world_dir):
+    run_incident(world_dir, approved_run(anchor(world_dir)), AutoReviewer(approve=True))
+    lessons = [json.loads(line) for line in (world_dir / "memory.jsonl").read_text().splitlines()]
+    assert [(r["service"], r["incident_id"], r["status"]) for r in lessons] == [
+        ("checkout-service", "INC-1042", "mitigated")
+    ]
+
+    # A new process on the same state directory recalls it first.
+    later = ScriptedModel([ToolCall("recall_past_incidents", {"service": "checkout-service"}), "done"])
+    run = run_incident(world_dir, later, AutoReviewer(), payloads=[sample_alert(anchor(world_dir))])
+    newest = json.loads(run.tool_messages("recall_past_incidents")[0])[0]["incident"]
+    assert newest.startswith("INC-1042")
+    assert "PAYMENTS_TIMEOUT_MS" in newest

@@ -11,9 +11,13 @@ dev = ["pytest>=8"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+markers = ["live: runs one incident with a real model (needs a provider key, costs a few cents)"]
+addopts = "-m 'not live'"
 
 [tool.ruff]
 line-length = 120
+# Code excerpts in GUIDE.md and README.md must stay exact copies of the source.
+extend-exclude = ["*.md"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP"]

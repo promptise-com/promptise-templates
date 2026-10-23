@@ -55,6 +55,10 @@ class RunTrace:
     entries: list[dict[str, Any]] = field(default_factory=list)
 
     @property
+    def date(self) -> str:
+        return datetime.fromtimestamp(self.started_at, timezone.utc).strftime("%Y-%m-%d")
+
+    @property
     def final_answer(self) -> str:
         for entry in reversed(self.entries):
             if entry["event_type"] == "agent.output":
