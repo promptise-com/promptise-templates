@@ -44,7 +44,7 @@ def payment_data_guardrail() -> PromptiseSecurityScanner:
     Customers paste these into support chats. With ``redact_input=True`` the
     redacted text is what reaches the model, the conversation store and memory.
     Regex detectors only: no model download. IBAN detection is left out on
-    purpose: as of 1.8.0 it also matches parcel tracking numbers such as
+    purpose: as of 1.9.0 it also matches parcel tracking numbers such as
     JD0146000039902, which this help desk must be able to show.
     """
     return PromptiseSecurityScanner(
@@ -161,7 +161,8 @@ def tool_uses(agent: PromptiseAgent, since: float, session_id: str) -> list[Tool
 
 
 def _arguments(recorded: Any) -> dict[str, Any]:
-    """Tool arguments as the trace recorded them: a dict, or its JSON or repr text."""
+    """Tool arguments as the trace recorded them: a dict (Promptise 1.9.0 and later), or the
+    JSON or repr text older versions recorded."""
     if isinstance(recorded, dict):
         return recorded
     for parse in (json.loads, ast.literal_eval):

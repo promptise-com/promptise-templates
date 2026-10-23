@@ -143,8 +143,9 @@ Each part of Promptise does one job here:
 | Journal and control API | Records each trigger, run and refused call; lets finance resume after a pause | `finance_agent/process.py`, `main.py` |
 
 Two parts are not used, on purpose. A mission ends a process when its goal is met, and
-this process never finishes. The Reasoning Engine patterns plug into `build_agent()`,
-but `ProcessConfig` (as of 1.8.0) has no option to pick one.
+this process never finishes. Since 1.9.0 a process can take a Reasoning Engine
+pattern (`ProcessConfig(agent_pattern=...)`). This one keeps the default tool loop, because
+the day's work is a short, fixed sequence of tool calls.
 
 ## Adapt it to your systems
 

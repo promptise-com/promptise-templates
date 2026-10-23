@@ -238,7 +238,7 @@ A `task_completed` runtime hook stores each finished incident summary. A copy go
 
 **Repeated alerts.** Alertmanager resends a firing alert at every `repeat_interval`. Make `open_incident` idempotent on the alert fingerprint, as the project does.
 
-**Custom reasoning graphs.** `build_agent()` accepts an `agent_pattern`. As of Promptise 1.8.0, `ProcessConfig` has no such field. A runtime process runs the default tool loop. Put the investigation order in the instructions.
+**Custom reasoning graphs.** Since Promptise 1.9.0, a runtime process takes a reasoning pattern: `ProcessConfig(agent_pattern=...)`. This project keeps the default tool loop and puts the investigation order in its instructions, which held up in the real runs. Try a plan-and-verify pattern if your runbooks are long.
 
 ## FAQ
 

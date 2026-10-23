@@ -25,8 +25,8 @@ RUN_END = {"agent.output", "agent.error"}
 
 
 def _arguments(value: Any) -> Any:
-    """Tool arguments as a dict. The tool.call event carries them as the text LangChain
-    passed to the callback (a Python repr), so parse that back when we can."""
+    """Tool arguments as a dict. Since Promptise 1.9.0 the tool.call event carries a dict;
+    older versions carried a Python repr string, which is parsed back when possible."""
     if not isinstance(value, str):
         return value
     for parse in (json.loads, ast.literal_eval):

@@ -3,7 +3,7 @@ name = "incident-response-agent"
 version = "1.0.0"
 description = "On-call incident agent built with Promptise: webhook trigger, runbooks, approvals, traces"
 requires-python = ">=3.10"
-dependencies = ["promptise==1.8.0"]
+dependencies = ["promptise==1.9.0"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]

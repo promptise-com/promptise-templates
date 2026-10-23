@@ -4,7 +4,7 @@ One AI support agent that you sell to many customer companies. Each company (a t
 
 > **Reference application.** This project shows how this use case can look with Promptise. It is not a finished product. The ticketing, orders and help-center data are local stand-ins with sample data, not connectors to a real helpdesk or shop system. Replace the adapter files before you use it with real data.
 
-Built with [Promptise](https://www.promptise.com) 1.8.0.
+Built with [Promptise](https://www.promptise.com) 1.9.0.
 
 ## The problem
 

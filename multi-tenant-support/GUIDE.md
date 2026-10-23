@@ -240,7 +240,7 @@ The test then checks every message the model received. None of them holds Acme d
 
 **`Depends()` runs before authentication.** A dependency sees no tenant yet. Look up tenant data inside the handler.
 
-**Traces key on `user_id` alone.** As of 1.8.0, a trace entry stores `alice`, not `acme::alice`. Put the session id in the caller's metadata, as `ask()` does, and map sessions to tenants.
+**Keep traces per tenant.** Since Promptise 1.9.0, every trace entry records the tenant and the session, so `acme::alice` and `globex::alice` stay apart. On older versions, a trace entry stores only `alice`. There, put the session id in the caller's metadata, as `ask()` does, and map sessions to tenants.
 
 **Blocks on a per-request prompt are sent twice.** The agent sends a prompt's build-time render and its per-request render. Put fixed rules in `graph_blocks` and keep the per-request prompt small.
 
