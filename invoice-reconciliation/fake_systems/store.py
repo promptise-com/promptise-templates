@@ -21,7 +21,10 @@ DB_ENV = "FINANCE_DB"
 """The environment variable both MCP servers read the database path from."""
 
 BUSINESS_DAY = "2026-10-22"
-"""The day the seed data covers.  The nightly run reconciles it."""
+"""The day the fixed seed covers (tests and the offline demo).
+
+The live application seeds yesterday instead, so tonight's run has data.
+"""
 
 SCHEMA = """
 CREATE TABLE customers (
@@ -196,17 +199,25 @@ def connect(path: Path | str | None = None) -> Iterator[sqlite3.Connection]:
         conn.close()
 
 
-def seed(path: Path | str) -> Path:
-    """Create a fresh database at *path* with the Lumen Metrics seed data."""
+def _on_day(table: list[tuple], day: str) -> list[tuple]:
+    """Move seed rows from BUSINESS_DAY to *day*."""
+    return [
+        tuple(v.replace(BUSINESS_DAY, day) if isinstance(v, str) else v for v in row)
+        for row in table
+    ]
+
+
+def seed(path: Path | str, day: str = BUSINESS_DAY) -> Path:
+    """Create a fresh database at *path* with the Lumen Metrics seed data for *day*."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.unlink(missing_ok=True)
     with connect(path) as conn:
         conn.executescript(SCHEMA)
         conn.executemany("INSERT INTO customers VALUES (?,?,?,?,?)", CUSTOMERS)
-        conn.executemany("INSERT INTO invoices VALUES (?,?,?,?,?,?,?)", INVOICES)
-        conn.executemany("INSERT INTO payments VALUES (?,?,?,?,?,?,?,?)", PAYMENTS)
-        conn.executemany("INSERT INTO refunds VALUES (?,?,?,?,?,?)", REFUNDS)
+        conn.executemany("INSERT INTO invoices VALUES (?,?,?,?,?,?,?)", _on_day(INVOICES, day))
+        conn.executemany("INSERT INTO payments VALUES (?,?,?,?,?,?,?,?)", _on_day(PAYMENTS, day))
+        conn.executemany("INSERT INTO refunds VALUES (?,?,?,?,?,?)", _on_day(REFUNDS, day))
     return path
 
 

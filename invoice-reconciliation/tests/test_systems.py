@@ -10,22 +10,20 @@ import asyncio
 import json
 
 import pytest
-from promptise.mcp.server import TestClient
+from promptise.mcp.server import TestClient, verify_audit_log
 
-from conftest import agent_refunds, query
+from conftest import AGENT_KEY, AUDIT_SECRET, READONLY_KEY, agent_refunds, query
 from fake_systems import billing_server, email_server
 
 
 @pytest.fixture
-def billing(db, monkeypatch):
-    monkeypatch.setenv("FINANCE_DB", str(db))
-    return TestClient(billing_server.server)
+def billing(server_env):
+    return TestClient(billing_server.create_server(), meta={"x-api-key": AGENT_KEY})
 
 
 @pytest.fixture
-def email(db, monkeypatch):
-    monkeypatch.setenv("FINANCE_DB", str(db))
-    return TestClient(email_server.server)
+def email(server_env):
+    return TestClient(email_server.create_server(), meta={"x-api-key": AGENT_KEY})
 
 
 def call(client: TestClient, tool: str, args: dict) -> dict:
@@ -103,3 +101,41 @@ def test_a_retried_webhook_sends_one_email(email, db):
     assert call(email, "send_customer_email", args)["status"] == "sent"
     assert call(email, "send_customer_email", args)["status"] == "already_sent"
     assert len(query(db, "SELECT * FROM outbox")) == 1
+
+
+def test_a_call_without_a_key_is_refused(server_env, db):
+    anonymous = TestClient(billing_server.create_server())
+    result = call(
+        anonymous, "refund_duplicate_charge", {"payment_id": "ch_2042b", "amount_cents": 2900}
+    )
+    assert result["error"]["code"] == "AUTHENTICATION_ERROR"
+    assert agent_refunds(db) == []
+
+
+def test_a_read_only_key_can_read_but_not_refund(server_env, db):
+    dashboard = TestClient(billing_server.create_server(), meta={"x-api-key": READONLY_KEY})
+    assert (
+        call(dashboard, "get_customer", {"customer_id": "cus_Yf8tH4g"})["name"] == "Jansen Bakery"
+    )
+    result = call(
+        dashboard, "refund_duplicate_charge", {"payment_id": "ch_2042b", "amount_cents": 2900}
+    )
+    assert result["error"]["code"] == "ACCESS_DENIED"
+    assert agent_refunds(db) == []
+
+
+def test_every_call_is_in_a_signed_audit_log(server_env, billing):
+    call(billing, "get_customer", {"customer_id": "cus_Yf8tH4g"})
+    call(billing, "refund_duplicate_charge", {"payment_id": "ch_2042b", "amount_cents": 2900})
+
+    lines = server_env.read_text().splitlines()
+    assert [json.loads(line)["tool"] for line in lines] == [
+        "get_customer",
+        "refund_duplicate_charge",
+    ]
+    assert json.loads(lines[1])["client_id"] == "finance-ops-agent"
+    assert verify_audit_log(server_env, AUDIT_SECRET).ok
+
+    # Editing an entry afterwards breaks the chain.
+    server_env.write_text(lines[0] + "\n" + lines[1].replace("2900", "290") + "\n")
+    assert not verify_audit_log(server_env, AUDIT_SECRET).ok

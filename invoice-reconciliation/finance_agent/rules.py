@@ -31,6 +31,9 @@ MAX_REFUNDS_PER_RUN = 3
 """More than three double charges in one night means something upstream broke.
 The fourth refund is refused and the agent pauses until finance looks."""
 
+FOLLOWUP_MEMORY_SIZE = 50
+"""How many customer follow-ups the agent keeps in its memory between runs."""
+
 
 async def refund_within_auto_limit(request: ApprovalRequest) -> bool:
     """True when a refund is small enough to skip the human reviewer.

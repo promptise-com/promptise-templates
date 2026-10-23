@@ -1,4 +1,4 @@
-"""The offline demo: one business day at Lumen Metrics, with no model API key.
+"""The offline demo: one scripted business day, for when you have no model API key yet.
 
 A ``ScriptedModel`` plays the model's part: it sends the tool calls a good
 model would send, in order.  Everything else is real: the two MCP servers,
@@ -18,6 +18,7 @@ from promptise import ApprovalDecision, QueueApprovalHandler
 from promptise.runtime import AgentProcess, TriggerEvent
 from promptise.testing import ScriptedModel, ToolCall
 
+from fake_systems.launch import start_fake_systems
 from fake_systems.store import BUSINESS_DAY, connect, euros, rows, seed
 from fake_systems.stripe_sender import post_event, sample_event
 
@@ -63,6 +64,10 @@ WEBHOOK_RUN = [
         "29.00 EUR for invoice in_2049 failed with card_declined. The customer got the "
         "payment link. Stripe retries the card in 3 days.",
         "in_2049",
+    ),
+    ToolCall(
+        "update_state",
+        {"key": "followups", "value": [f"{BUSINESS_DAY} cus_Yf8tH4g in_2049 payment_failed_retry"]},
     ),
     "Emailed Jansen Bakery a payment link for LM-2049 (29.00 EUR, card declined) "
     "and opened a finance note.",
@@ -187,11 +192,19 @@ def _print_audit(settings: Settings) -> None:
 async def run_demo() -> None:
     shutil.rmtree(DEMO_DIR, ignore_errors=True)
     db = seed(DEMO_DIR / "finance.sqlite")
+    # Throwaway secrets for this run only: webhook signing, the agent's API key, the audit chain.
+    secret = secrets.token_hex(16)
+    systems = start_fake_systems(
+        db,
+        agent_key=secrets.token_urlsafe(24),
+        audit_secret=secrets.token_hex(32),
+        data_dir=DEMO_DIR / "systems",
+    )
     reviewer = QueueApprovalHandler()
-    secret = secrets.token_hex(16)  # a throwaway signing secret, shared with the sender below
     model = ScriptedModel(WEBHOOK_RUN + NIGHTLY_RUN)
     settings = Settings(
         db_path=db,
+        servers=systems.servers,
         webhook_secret=secret,
         reviewer=reviewer,
         model=model,
@@ -234,3 +247,4 @@ async def run_demo() -> None:
     finally:
         reviewer_task.cancel()
         await process.stop()
+        systems.stop()

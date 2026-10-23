@@ -1,7 +1,7 @@
 """Post a signed Stripe event to the running agent, the way Stripe does.
 
-    python scripts/send_test_webhook.py                  # the sample event
-    python scripts/send_test_webhook.py my_event.json --port 8787
+    promptise run webhook                         # the sample event, secret from .env
+    promptise run webhook -- my_event.json --port 8787
 
 The secret comes from STRIPE_WEBHOOK_SECRET, the same variable the agent
 reads.  With the Stripe CLI you can forward real test events instead:
@@ -14,6 +14,7 @@ import argparse
 import json
 import os
 import sys
+import urllib.error
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -32,7 +33,12 @@ def main() -> int:
         print("Set STRIPE_WEBHOOK_SECRET to the secret the agent uses.", file=sys.stderr)
         return 2
     event = json.loads(Path(args.event).read_text())
-    status, answer = post_event(f"http://127.0.0.1:{args.port}/stripe", event, secret)
+    url = f"http://127.0.0.1:{args.port}/stripe"
+    try:
+        status, answer = post_event(url, event, secret)
+    except urllib.error.URLError as exc:
+        print(f"Nothing answers at {url} ({exc.reason}). Is the agent running?", file=sys.stderr)
+        return 1
     print(status, answer)
     return 0 if status in (200, 202) else 1
 

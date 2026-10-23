@@ -9,6 +9,7 @@ from promptise.mcp.server import TestClient
 from promptise.testing import ScriptedModel, ToolCall
 
 from conftest import (
+    AGENT_KEY,
     NIGHTLY_EVENT,
     agent_refunds,
     query,
@@ -53,16 +54,15 @@ def test_double_charge_names_only_the_duplicate(db):
     assert large["refundable_cents"] == 49000
 
 
-def test_a_refunded_duplicate_is_not_flagged_again(db, monkeypatch):
+def test_a_refunded_duplicate_is_not_flagged_again(db, server_env):
     # in_2050 was double charged and refunded by support: no mismatch.
-    monkeypatch.setenv("FINANCE_DB", str(db))
     with connect(db) as conn:
         assert "in_2050" not in {
             m["invoice_id"] for m in reconcile_day(conn, BUSINESS_DAY)["mismatches"]
         }
 
     # Refunding a duplicate resolves it, so a second nightly run won't refund it twice.
-    client = TestClient(billing_server.server)
+    client = TestClient(billing_server.create_server(), meta={"x-api-key": AGENT_KEY})
     asyncio.run(
         client.call_tool(
             "refund_duplicate_charge", {"payment_id": "ch_2042b", "amount_cents": 2900}

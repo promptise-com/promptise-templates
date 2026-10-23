@@ -4,18 +4,21 @@ In production this is a thin MCP server in front of Stripe (or Chargebee,
 Recurly, your own ledger).  The tool names and arguments stay the same, so
 the agent does not change when you swap the backend.
 
-Run it on its own with ``python -m fake_systems.billing_server``; the agent
-process starts it over stdio.
+It runs over HTTP and every tool needs an API key with the right role (see
+``security.py``).  ``python -m fake_systems.billing_server --port 8801``
+starts it on its own; ``main.py`` starts it for you.
 """
 
 from __future__ import annotations
 
+import argparse
 from typing import Annotated, Literal
 
 from promptise.mcp.server import MCPServer, ToolError
 from pydantic import Field
 
 from .reconcile import reconcile_day as _reconcile_day
+from .security import NOTES, READ, REFUNDS, secure
 from .store import connect, euros, rows
 
 MAX_REFUND_CENTS = 100_000
@@ -25,14 +28,7 @@ The agent's approval rule sits in front of it, but this check does not
 depend on the agent being configured correctly.
 """
 
-server = MCPServer(
-    name="billing",
-    version="1.0.0",
-    instructions="Lumen Metrics billing: invoices, payments, refunds and finance notes.",
-)
 
-
-@server.tool(read_only_hint=True)
 def reconcile_day(
     date: Annotated[str, Field(pattern=r"^\d{4}-\d{2}-\d{2}$", description="Day, YYYY-MM-DD.")],
 ) -> dict:
@@ -43,7 +39,6 @@ def reconcile_day(
         return _reconcile_day(conn, date)
 
 
-@server.tool(read_only_hint=True)
 def get_invoice(
     invoice_id: Annotated[str, Field(description='Invoice ID, for example "in_2049".')],
 ) -> dict:
@@ -65,7 +60,6 @@ def get_invoice(
         return invoice
 
 
-@server.tool(read_only_hint=True)
 def get_customer(
     customer_id: Annotated[str, Field(description='Customer ID, for example "cus_Yf8tH4g".')],
 ) -> dict:
@@ -80,7 +74,6 @@ def get_customer(
     return {**found[0], "email_on_file": True}
 
 
-@server.tool(destructive_hint=True, idempotent_hint=False)
 def refund_duplicate_charge(
     payment_id: Annotated[str, Field(description="The duplicate payment to refund.")],
     amount_cents: Annotated[int, Field(gt=0, description="Amount to refund, in cents.")],
@@ -144,7 +137,6 @@ def refund_duplicate_charge(
     }
 
 
-@server.tool()
 def create_finance_note(
     subject: Annotated[str, Field(max_length=120)],
     body: Annotated[str, Field(max_length=2000)],
@@ -161,5 +153,26 @@ def create_finance_note(
     return {"note_id": note_id, "priority": priority, "invoice_id": invoice_id}
 
 
+def create_server() -> MCPServer:
+    """The billing server, with auth and audit read from the environment."""
+    server = MCPServer(
+        name="billing",
+        version="1.0.0",
+        instructions="Lumen Metrics billing: invoices, payments, refunds and finance notes.",
+        require_auth=True,  # no key, no tool: checked before the MCP layer
+    )
+    secure(server)
+    server.tool(roles=[READ], read_only_hint=True)(reconcile_day)
+    server.tool(roles=[READ], read_only_hint=True)(get_invoice)
+    server.tool(roles=[READ], read_only_hint=True)(get_customer)
+    server.tool(roles=[REFUNDS], destructive_hint=True, idempotent_hint=False)(
+        refund_duplicate_charge
+    )
+    server.tool(roles=[NOTES])(create_finance_note)
+    return server
+
+
 if __name__ == "__main__":
-    server.run()
+    parser = argparse.ArgumentParser(description="The fake billing MCP server")
+    parser.add_argument("--port", type=int, default=8801)
+    create_server().run(transport="http", host="127.0.0.1", port=parser.parse_args().port)

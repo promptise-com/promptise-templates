@@ -17,10 +17,12 @@ packages = ["fake_systems", "finance_agent"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = ["live: runs the agent with a real model (needs a model API key, costs a few cents)"]
+addopts = "-m 'not live'"
 
 [tool.ruff]
 line-length = 100
-extend-exclude = [".venv", ".data", ".promptise"]
+extend-exclude = [".venv", ".data", ".promptise", "*.md"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "W", "B", "UP"]

@@ -1,21 +1,17 @@
-"""Wire the agent into an Agent Runtime process: triggers, servers, rules, traces."""
+"""Wire the agent into an Agent Runtime process: triggers, servers, rules, memory, traces."""
 
 from __future__ import annotations
 
-import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from promptise import ApprovalHandler
-from promptise.config import StdioServerSpec
 from promptise.observability_config import ObservabilityConfig, ObserveLevel, TransporterType
 from promptise.runtime import ContextConfig, JournalConfig, ProcessConfig, TriggerConfig
 
-from fake_systems.store import DB_ENV
-
 from .hooks import budget_refusal_hook, denied_refund_recorder
-from .instructions import INSTRUCTIONS
+from .prompt import INSTRUCTIONS
 from .rules import approval_audit_log, autonomy_budget, refund_approval_policy
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -25,16 +21,18 @@ PROCESS_NAME = "finance-ops"
 
 @dataclass
 class Settings:
-    """Everything that differs between the demo, the tests and production."""
+    """Everything that differs between production, the offline demo and the tests."""
 
     db_path: Path
-    """The fake systems' SQLite file."""
+    """Where the code-written finance notes go (the fake billing database)."""
+    servers: dict[str, Any]
+    """The MCP servers: ``{"billing": HTTPServerSpec(...), "email": HTTPServerSpec(...)}``."""
     webhook_secret: str
     """Stripe's signing secret (whsec_...) for the webhook endpoint."""
     reviewer: ApprovalHandler
     """Who decides refunds above the threshold."""
     model: Any = "openai:gpt-5-mini"
-    """A model id, or a model object (the demo and tests pass a ScriptedModel)."""
+    """A model id, or a model object (the offline demo and tests pass a ScriptedModel)."""
     webhook_port: int = 8787
     approval_timeout: float = 1800.0
     """Seconds a refund waits for a person before it is denied."""
@@ -45,26 +43,12 @@ class Settings:
     journal_dir: Path | None = PROJECT_ROOT / ".promptise" / "journal"
 
 
-def mcp_servers(db_path: Path) -> dict[str, StdioServerSpec]:
-    """The billing system and the email service, each as its own MCP server."""
-    env = {DB_ENV: str(db_path)}
-    return {
-        name: StdioServerSpec(
-            command=sys.executable,
-            args=["-m", f"fake_systems.{name}_server"],
-            env=env,
-            cwd=str(PROJECT_ROOT),
-        )
-        for name in ("billing", "email")
-    }
-
-
 def build_process_config(settings: Settings) -> ProcessConfig:
     settings.trace_dir.mkdir(parents=True, exist_ok=True)
     return ProcessConfig(
         model=settings.model,
         instructions=INSTRUCTIONS,
-        servers=mcp_servers(settings.db_path),
+        servers=settings.servers,
         triggers=[
             TriggerConfig(
                 type="cron",
@@ -81,8 +65,15 @@ def build_process_config(settings: Settings) -> ProcessConfig:
                 filter_expression="payload['type'] == 'invoice.payment_failed'",
             ),
         ],
-        # Each event is its own job: no chat history carried between runs.
-        context=ContextConfig(conversation_history=False),
+        context=ContextConfig(
+            # Each event is its own job: no chat history carried between runs.
+            conversation_history=False,
+            # What the agent remembers between runs: the customers it followed up.
+            # The journal persists it, so it survives a restart.
+            initial_state={"followups": []},
+            writable_keys=["followups"],
+            state_tool=True,
+        ),
         budget=autonomy_budget(),
         approval=refund_approval_policy(
             settings.reviewer,
@@ -108,5 +99,7 @@ def build_process_config(settings: Settings) -> ProcessConfig:
         ),
         # A refund the budget refused becomes a finance note, written by code.
         hooks=[budget_refusal_hook(settings.db_path)],
+        # A run is cut off after the approval timeout plus ten minutes of work.
+        max_invocation_time=settings.approval_timeout + 600,
         restart_policy="on_failure",
     )

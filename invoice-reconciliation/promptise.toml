@@ -7,12 +7,13 @@ description = "Finance operations agent: nightly reconciliation, failed-payment 
 main = "main.py"
 
 [scripts]
-demo = "promptise run main.py -- --demo"                    # offline, no API key
-demo-trace = "promptise run main.py --devtools -- --demo"   # the same, with a live trace
-start = "promptise run --prod"                              # live: cron + Stripe webhook, JSON logs
-reconcile = "promptise run main.py -- --reconcile-now"      # live, reconcile once now
-webhook = "python scripts/send_test_webhook.py"             # post the sample Stripe event
-test = "pytest -q"
+start = "promptise run main.py --devtools"                         # the agent, live trace on stderr
+reconcile = "promptise run main.py --devtools -- --reseed --reconcile-now"  # fresh data, reconcile now
+prod = "promptise run --prod"                                      # JSON logs, graceful SIGTERM
+webhook = "promptise run scripts/send_test_webhook.py"             # post a signed sample Stripe event
+test = "pytest -q"                                                 # offline tests
+test-live = "pytest -q -m live"                                    # one real run (needs a model key)
+demo-offline = "promptise run main.py -- --demo"                   # no key yet: a scripted day
 
 [env]
 files = [".env"]
@@ -25,3 +26,8 @@ observe = "standard"
 log_format = "json"
 log_level = "INFO"
 shutdown_timeout = 30
+
+# USD per 1M tokens, for the cost estimate in --devtools. Check your provider's
+# current prices before you rely on it.
+[pricing]
+"gpt-5-mini*" = { input = 0.25, output = 2.0 }

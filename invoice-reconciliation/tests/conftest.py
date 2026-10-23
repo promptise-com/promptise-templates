@@ -23,6 +23,7 @@ sys.path.insert(0, str(ROOT))
 from promptise import ApprovalHandler, QueueApprovalHandler  # noqa: E402
 from promptise.runtime import AgentProcess, TriggerEvent  # noqa: E402
 
+from fake_systems.launch import FakeSystems, start_fake_systems  # noqa: E402
 from fake_systems.store import connect, rows, seed  # noqa: E402
 from finance_agent.process import PROCESS_NAME, Settings, build_process_config  # noqa: E402
 
@@ -44,11 +45,47 @@ def free_port() -> int:
         return s.getsockname()[1]
 
 
+AGENT_KEY = "test-agent-key-0123456789"
+READONLY_KEY = "test-readonly-key-0123456789"
+AUDIT_SECRET = "test-audit-secret-0123456789abcdef"
+
+
 @pytest.fixture
-def make_settings(tmp_path: Path, db: Path):
+def server_env(db: Path, tmp_path: Path, monkeypatch) -> Path:
+    """The environment the MCP servers read, for in-process TestClient tests.
+
+    Returns the audit log path.
+    """
+    audit_log = tmp_path / "audit.jsonl"
+    monkeypatch.setenv("FINANCE_DB", str(db))
+    monkeypatch.setenv("FINANCE_AGENT_API_KEY", AGENT_KEY)
+    monkeypatch.setenv("FINANCE_READONLY_API_KEY", READONLY_KEY)
+    monkeypatch.setenv("PROMPTISE_AUDIT_SECRET", AUDIT_SECRET)
+    monkeypatch.setenv("AUDIT_LOG", str(audit_log))
+    return audit_log
+
+
+@pytest.fixture
+def systems(tmp_path: Path, db: Path):
+    """The billing and email servers over HTTP, as in production."""
+    started = start_fake_systems(
+        db,
+        agent_key=AGENT_KEY,
+        readonly_key=READONLY_KEY,
+        audit_secret=AUDIT_SECRET,
+        data_dir=tmp_path / "systems",
+        ports=(free_port(), free_port()),
+    )
+    yield started
+    started.stop()
+
+
+@pytest.fixture
+def make_settings(tmp_path: Path, db: Path, systems: FakeSystems):
     def _make(model, reviewer: ApprovalHandler | None = None, **overrides) -> Settings:
         values = dict(
             db_path=db,
+            servers=systems.servers,
             webhook_secret="whsec_test_only",
             reviewer=reviewer or QueueApprovalHandler(),
             model=model,

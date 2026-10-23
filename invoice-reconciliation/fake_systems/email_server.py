@@ -8,11 +8,13 @@ with.  In production, swap the outbox table for Postmark, SES or SendGrid.
 
 from __future__ import annotations
 
+import argparse
 from typing import Annotated, Literal
 
 from promptise.mcp.server import MCPServer, ToolError
 from pydantic import Field
 
+from .security import EMAIL, secure
 from .store import connect, euros, rows
 
 PAY_URL = "https://billing.lumen-metrics.example/pay/{invoice_id}"
@@ -35,10 +37,7 @@ TEMPLATES = {
     ),
 }
 
-server = MCPServer(name="email", version="1.0.0", instructions="Lumen Metrics customer email.")
 
-
-@server.tool(open_world_hint=True)
 def send_customer_email(
     customer_id: Annotated[str, Field(description="The customer to write to.")],
     invoice_id: Annotated[str, Field(description="The invoice the email is about.")],
@@ -104,5 +103,20 @@ def send_customer_email(
     return {"status": "sent", "message_id": f"msg_{cur.lastrowid:04d}", "template": template}
 
 
+def create_server() -> MCPServer:
+    """The email server, with auth and audit read from the environment."""
+    server = MCPServer(
+        name="email",
+        version="1.0.0",
+        instructions="Lumen Metrics customer email.",
+        require_auth=True,
+    )
+    secure(server)
+    server.tool(roles=[EMAIL], open_world_hint=True)(send_customer_email)
+    return server
+
+
 if __name__ == "__main__":
-    server.run()
+    parser = argparse.ArgumentParser(description="The fake email MCP server")
+    parser.add_argument("--port", type=int, default=8802)
+    create_server().run(transport="http", host="127.0.0.1", port=parser.parse_args().port)
