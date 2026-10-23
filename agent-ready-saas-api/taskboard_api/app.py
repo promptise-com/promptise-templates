@@ -1,12 +1,11 @@
-"""Taskboard REST API: the product's existing public API.
+"""Taskboard REST API: a small sample API standing in for your product's API.
 
-This is the starting point: an ordinary FastAPI service with projects, tasks
-and comments, authenticated with one API token per customer workspace.
+An ordinary FastAPI service with projects, tasks and comments, with sample
+data, authenticated with one API token per customer workspace.
 Nothing in it knows about MCP or agents. The MCP server in ``mcp_server/``
 sits in front of it and calls it over HTTP, the way it would call your API.
 
-Run it on its own:  uvicorn taskboard_api.app:app --port 8000
-Its OpenAPI document is served at /openapi.json (and exported to openapi.json).
+Run it with `promptise run api`. Its OpenAPI document is served at /openapi.json.
 """
 
 # No `from __future__ import annotations` here: FastAPI resolves the
@@ -26,7 +25,7 @@ from .store import MEMBERS, WORKSPACES, Store, new_comment, new_project, new_tas
 TaskStatus = Literal["todo", "in_progress", "done"]
 
 
-# -- models: descriptions here end up in openapi.json, and mcpcast reads them --
+# -- models: their descriptions end up in the OpenAPI document at /openapi.json --
 
 
 class Project(BaseModel):

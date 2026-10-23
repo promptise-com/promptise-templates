@@ -24,20 +24,20 @@ async def main() -> None:
     url = os.environ.get("TASKBOARD_MCP_URL", "http://127.0.0.1:8080/mcp")
     seen: set[str] = set()
     async with MCPClient(url=url, api_key=os.environ["TASKBOARD_APPROVER_KEY"]) as client:
-        print(f"Watching {url} for calls that need your approval. Ctrl+C to stop.")
+        print(f"Watching {url} for calls that need your approval. Ctrl+C to stop.", flush=True)
         while True:
             for p in json.loads(text(await client.call_tool("approvals_list", {}))):
                 if p["request_id"] in seen:
                     continue
                 seen.add(p["request_id"])
-                print(f"\n{p['client_id']} wants to run {p['tool']} with {json.dumps(p['arguments'])}")
+                print(f"\n{p['client_id']} wants to run {p['tool']} with {json.dumps(p['arguments'])}", flush=True)
                 answer = await asyncio.to_thread(input, "Approve? [y/N] ")
                 approve = answer.strip().lower() == "y"
                 reason = "" if approve else await asyncio.to_thread(input, "Reason for the agent (optional): ")
                 result = await client.call_tool(
                     "approvals_decide", {"request_id": p["request_id"], "approve": approve, "reason": reason}
                 )
-                print(text(result))
+                print(f"\n{'approved' if approve else 'denied'}: {text(result)}", flush=True)
             await asyncio.sleep(2)
 
 

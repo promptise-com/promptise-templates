@@ -3,8 +3,8 @@
     promptise run setup
 
 Writes .env (git-ignored, readable only by you) with random API tokens for
-the two seed workspaces, an audit key, an agent key for acme-ops-agent
-(admin access) and a reviewer key for dana@acme (approver). It never
+the two seed workspaces, an audit key, and three keys: acme-ops-agent
+(admin), dana@acme (approver) and acme-report-bot (reader). It never
 prints a secret and refuses to touch an existing .env.
 """
 
@@ -29,6 +29,7 @@ tokens = json.dumps({"acme": secrets.token_urlsafe(24), "globex": secrets.token_
 store = KeyStore(ROOT / ".data" / "agent_keys.json")
 agent_key, agent = store.create(workspace="acme", name="acme-ops-agent", access="admin")
 reviewer_key, reviewer = store.create(workspace="acme", name="dana@acme", access="approver")
+reader_key, reader = store.create(workspace="acme", name="acme-report-bot", access="reader")
 
 lines = [
     "# Written by `promptise run setup`. Development values only.",
@@ -37,6 +38,7 @@ lines = [
     f"PROMPTISE_AUDIT_SECRET={secrets.token_hex(32)}",
     f"TASKBOARD_AGENT_KEY={agent_key}",
     f"TASKBOARD_APPROVER_KEY={reviewer_key}",
+    f"TASKBOARD_READER_KEY={reader_key}",
     "# The customer agent's model. Set the provider key here or in your shell:",
     "# OPENAI_API_KEY=",
     "",
@@ -47,3 +49,4 @@ with os.fdopen(fd, "w") as fh:
 print("wrote .env and .data/agent_keys.json")
 print(f"agent key    {agent['key_id']}  acme-ops-agent  (admin)     -> TASKBOARD_AGENT_KEY")
 print(f"reviewer key {reviewer['key_id']}  dana@acme       (approver)  -> TASKBOARD_APPROVER_KEY")
+print(f"reader key   {reader['key_id']}  acme-report-bot (reader)    -> TASKBOARD_READER_KEY")

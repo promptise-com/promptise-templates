@@ -1,22 +1,22 @@
 name = "agent-ready-saas-api"
 version = "1.0.0"
 description = "A safe MCP server in front of a SaaS REST API, for customers' AI agents"
-main = "customer_agent/main.py"             # `promptise run`: the customer agent does one task
-agent = "customer_agent/agent.py:create_agent"  # `promptise run chat`: talk to it
+main = "customer_agent/main.py"                 # `promptise run`: the customer agent does one task
+agent = "customer_agent.agent:create_agent"     # `promptise run chat`: talk to it
 
 [scripts]
-demo = "promptise run demo.py"              # offline, no model key: the whole story
-setup = "python scripts/setup_dev.py"       # write .env with fresh dev secrets and two keys
-api = "promptise run scripts/run_api.py"    # the existing REST API on :8000
-mcp = "promptise run scripts/run_mcp_server.py"  # the MCP server on :8080/mcp
-agent = "promptise run customer_agent/main.py"
+setup = "python scripts/setup_dev.py"           # .env with fresh dev secrets and three keys
+api = "promptise run scripts/run_api.py"        # the Taskboard REST API on :8000
+mcp = "promptise run scripts/run_mcp_server.py" # the MCP server on :8080/mcp
+approvals = "promptise run scripts/approvals.py"  # the reviewer's console (dana@acme)
+agent = "promptise run customer_agent/main.py"  # the customer agent, with a real model
+agent-reader = "promptise run customer_agent/main.py -- --key-env TASKBOARD_READER_KEY"
 chat = "promptise run --mode chat"
-approvals = "promptise run scripts/approvals.py"  # the reviewer's console
-keys = "promptise run scripts/keys.py --"   # list | create ... | revoke <key_id>
+keys = "promptise run scripts/keys.py --"       # list | create ... | revoke <key_id>
 audit = "promptise audit verify .data/audit.jsonl"
-spec = "python scripts/export_openapi.py"
-mcpcast = "promptise mcpcast openapi.json --no-curate --profile full --auth api-key --name taskboard --output mcpcast_draft --force"
 test = "pytest"
+test-live = "pytest -m live"                    # one real end-to-end run, needs a model key
+demo-offline = "promptise run demo.py"          # no model key: a scripted model, same server
 
 [env]
 files = [".env"]

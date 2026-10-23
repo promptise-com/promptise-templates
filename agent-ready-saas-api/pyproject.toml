@@ -15,12 +15,15 @@ dev = ["pytest>=8", "pytest-asyncio>=0.24"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# The live test calls a real model; run it with: pytest -m live
+addopts = "-m 'not live'"
+markers = ["live: calls a real model provider (needs its API key)"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 
 [tool.ruff]
 line-length = 120
-extend-exclude = ["mcpcast_draft"]
+extend-exclude = ["*.md"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]

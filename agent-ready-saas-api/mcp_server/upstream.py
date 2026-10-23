@@ -30,6 +30,13 @@ class TaskboardAPI:
     async def aclose(self) -> None:
         await self._http.aclose()
 
+    async def healthy(self) -> bool:
+        """Readiness check: does the Taskboard API answer its health route?"""
+        try:
+            return (await self._http.get("/health", timeout=3.0)).status_code == 200
+        except httpx.HTTPError:
+            return False
+
     async def call(
         self,
         workspace: str,

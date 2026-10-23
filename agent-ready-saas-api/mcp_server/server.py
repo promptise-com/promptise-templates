@@ -1,7 +1,7 @@
 """The Taskboard MCP server: what customers' agents connect to.
 
-MCPcast drafted a first version from openapi.json (see mcpcast_draft/). This
-is the hand-tuned server that ships. The request pipeline, in order:
+Built with the Promptise MCP server SDK. Every call runs through this
+pipeline, in order:
 
 1. AuditMiddleware        every call, allowed or refused, into an HMAC-chained log
 2. AuthMiddleware         an agent API key -> client id, workspace, roles
@@ -10,6 +10,7 @@ is the hand-tuned server that ships. The request pipeline, in order:
 5. the tool's own guard   roles=[...] on each tool below
 
 Each tool calls the Taskboard REST API for the caller's workspace only.
+GET /health and GET /health/ready serve container and load-balancer probes.
 """
 
 from __future__ import annotations
@@ -24,6 +25,7 @@ from promptise.mcp.server import (
     ApprovalGateMiddleware,
     AuditMiddleware,
     AuthMiddleware,
+    HealthCheck,
     MCPServer,
     PendingApprover,
     RateLimitMiddleware,
@@ -103,6 +105,12 @@ def build_server(settings: Settings, *, http_client: httpx.AsyncClient | None = 
 
     api = TaskboardAPI(settings.api_url, settings.upstream_tokens or {}, http_client=http_client)
     server.on_shutdown(api.aclose)
+
+    # GET /health answers while the process runs. GET /health/ready answers 503
+    # while the Taskboard API is down, so a load balancer stops sending agents here.
+    health = HealthCheck()
+    health.add_check("taskboard_api", api.healthy, required_for_ready=True)
+    health.register_resources(server)
 
     def ws(ctx: RequestContext) -> str:
         return ctx.client.tenant_id
