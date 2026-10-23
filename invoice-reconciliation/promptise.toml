@@ -1,0 +1,27 @@
+# How `promptise run` runs this project, like package.json for npm.
+# Reference: https://docs.promptise.com/core/projects/
+
+name = "invoice-reconciliation"
+version = "1.0.0"
+description = "Finance operations agent: nightly reconciliation, failed-payment follow-up, capped refunds"
+main = "main.py"
+
+[scripts]
+demo = "promptise run main.py -- --demo"                    # offline, no API key
+demo-trace = "promptise run main.py --devtools -- --demo"   # the same, with a live trace
+start = "promptise run --prod"                              # live: cron + Stripe webhook, JSON logs
+reconcile = "promptise run main.py -- --reconcile-now"      # live, reconcile once now
+webhook = "python scripts/send_test_webhook.py"             # post the sample Stripe event
+test = "pytest -q"
+
+[env]
+files = [".env"]
+vars = { FINANCE_AGENT_MODEL = "openai:gpt-5-mini", WEBHOOK_PORT = "8787" }
+
+[dev]
+observe = "standard"
+
+[prod]
+log_format = "json"
+log_level = "INFO"
+shutdown_timeout = 30

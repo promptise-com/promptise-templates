@@ -1,0 +1,29 @@
+[project]
+name = "invoice-reconciliation"
+version = "1.0.0"
+description = "A finance operations agent: nightly invoice reconciliation, failed-payment follow-up, refunds with hard limits."
+requires-python = ">=3.10"
+dependencies = ["promptise==1.7.1"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["fake_systems", "finance_agent"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+extend-exclude = [".venv", ".data", ".promptise"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "B", "UP"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["fake_systems", "finance_agent", "conftest"]
