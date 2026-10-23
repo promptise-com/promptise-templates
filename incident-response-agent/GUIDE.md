@@ -1,5 +1,5 @@
 ---
-title: "How to Build an AI Incident Response Agent with Runbooks"
+title: "AI Incident Response Agent: Runbooks and Approvals"
 description: "Build an AI incident response agent in Python. An Alertmanager webhook wakes it. It follows your runbook. Rollbacks and restarts wait for a person to approve."
 slug: incident-response-agent
 queries:
@@ -238,7 +238,7 @@ A `task_completed` runtime hook stores each finished incident summary. A copy go
 
 **Repeated alerts.** Alertmanager resends a firing alert at every `repeat_interval`. Make `open_incident` idempotent on the alert fingerprint, as the project does.
 
-**Custom reasoning graphs.** `build_agent()` accepts an `agent_pattern`. In Promptise 1.7.1, `ProcessConfig` has no such field. A runtime process runs the default tool loop. Put the investigation order in the instructions.
+**Custom reasoning graphs.** `build_agent()` accepts an `agent_pattern`. As of Promptise 1.8.0, `ProcessConfig` has no such field. A runtime process runs the default tool loop. Put the investigation order in the instructions.
 
 ## FAQ
 

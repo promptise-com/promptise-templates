@@ -1,5 +1,5 @@
 ---
-title: "How to Build an Invoice Reconciliation AI Agent in Python"
+title: "Invoice Reconciliation AI Agent: Build It in Python"
 description: "Build an agent that reconciles invoices against payments every night, follows up failed Stripe payments and refunds double charges within hard limits."
 slug: invoice-reconciliation
 queries:

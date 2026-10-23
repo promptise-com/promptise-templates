@@ -44,7 +44,7 @@ def payment_data_guardrail() -> PromptiseSecurityScanner:
     Customers paste these into support chats. With ``redact_input=True`` the
     redacted text is what reaches the model, the conversation store and memory.
     Regex detectors only: no model download. IBAN detection is left out on
-    purpose: in 1.7.1 it also matches parcel tracking numbers such as
+    purpose: as of 1.8.0 it also matches parcel tracking numbers such as
     JD0146000039902, which this help desk must be able to show.
     """
     return PromptiseSecurityScanner(

@@ -144,7 +144,7 @@ Each part of Promptise does one job here:
 
 Two parts are not used, on purpose. A mission ends a process when its goal is met, and
 this process never finishes. The Reasoning Engine patterns plug into `build_agent()`,
-but `ProcessConfig` in 1.7.1 has no option to pick one.
+but `ProcessConfig` (as of 1.8.0) has no option to pick one.
 
 ## Adapt it to your systems
 

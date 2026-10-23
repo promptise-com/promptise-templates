@@ -1,5 +1,5 @@
 ---
-title: "How to Build a Multi-Tenant AI Customer Support Agent in Python"
+title: "Multi-Tenant AI Support Agent: Build It in Python"
 description: "Build one AI support agent for many customer companies. Each tenant keeps its own data, memory, permissions and rate limit, even under prompt injection."
 slug: multi-tenant-support
 queries:
@@ -240,7 +240,7 @@ The test then checks every message the model received. None of them holds Acme d
 
 **`Depends()` runs before authentication.** A dependency sees no tenant yet. Look up tenant data inside the handler.
 
-**Traces key on `user_id` alone.** In 1.7.1, a trace entry stores `alice`, not `acme::alice`. Put the session id in the caller's metadata, as `ask()` does, and map sessions to tenants.
+**Traces key on `user_id` alone.** As of 1.8.0, a trace entry stores `alice`, not `acme::alice`. Put the session id in the caller's metadata, as `ask()` does, and map sessions to tenants.
 
 **Blocks on a per-request prompt are sent twice.** The agent sends a prompt's build-time render and its per-request render. Put fixed rules in `graph_blocks` and keep the per-request prompt small.
 

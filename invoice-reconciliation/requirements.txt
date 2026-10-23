@@ -1,2 +1,2 @@
-promptise==1.7.1
+promptise==1.8.0
 pytest>=8

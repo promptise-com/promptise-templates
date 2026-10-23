@@ -3,7 +3,7 @@ name = "invoice-reconciliation"
 version = "1.0.0"
 description = "A finance operations agent: nightly invoice reconciliation, failed-payment follow-up, refunds with hard limits."
 requires-python = ">=3.10"
-dependencies = ["promptise==1.7.1"]
+dependencies = ["promptise==1.8.0"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]

@@ -11,7 +11,7 @@ error rate again and writes the incident summary with a timeline.
 > not connectors to Prometheus, Loki, your CI/CD or Slack. Replace the adapter files before you point it
 > at production.
 
-Built with [Promptise](https://www.promptise.com) 1.7.1: an Agent Runtime process with a signed webhook
+Built with [Promptise](https://www.promptise.com) 1.8.0: an Agent Runtime process with a signed webhook
 trigger, an MCP server with API-key auth and role guards, an approval policy, an autonomy budget, a
 journal, per-service memory, prompts as code and observability.
 

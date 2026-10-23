@@ -1,5 +1,5 @@
 ---
-title: "How to Build a Secure MCP Server for Your SaaS API in Python"
+title: "Secure MCP Server for Your SaaS API in Python"
 description: "Let customers' AI agents use your SaaS API safely: an MCP server with API keys, per-tool roles, human approval for deletes, audit logs and key revocation."
 slug: agent-ready-saas-api
 queries:
