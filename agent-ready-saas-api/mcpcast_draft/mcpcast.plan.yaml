@@ -1,0 +1,467 @@
+# mcpcast.plan.yaml — the editable source of truth for this MCP server.
+# Edit tool names, descriptions, examples, hidden params or the dropped
+# list, then regenerate (this file is left untouched):  promptise mcpcast mcpcast.plan.yaml
+version: 1
+api:
+  name: taskboard
+  base_url: http://127.0.0.1:8000
+  auth: api-key
+  description: 'Taskboard API: Projects, tasks and comments for Taskboard workspaces.'
+  spec_source: openapi.json
+profile: full
+tools:
+- name: health_check
+  description: Liveness probe
+  risk: read
+  routes:
+  - operation_id: health_check
+    method: GET
+    path: /health
+  tags:
+  - ops
+- name: list_members
+  description: List workspace members
+  risk: read
+  routes:
+  - operation_id: list_members
+    method: GET
+    path: /members
+  tags:
+  - members
+- name: list_projects
+  description: List projects
+  risk: read
+  routes:
+  - operation_id: list_projects
+    method: GET
+    path: /projects
+    params:
+      status:
+        location: query
+  params:
+    status:
+      description: Only projects with this status.
+      json_schema:
+        anyOf:
+        - enum:
+          - active
+          - archived
+          type: string
+        - type: 'null'
+        description: Only projects with this status.
+        title: Status
+  tags:
+  - projects
+- name: create_project
+  description: Create a project
+  risk: write
+  routes:
+  - operation_id: create_project
+    method: POST
+    path: /projects
+    params:
+      name:
+        location: body
+        required: true
+      description:
+        location: body
+  params:
+    name:
+      description: Project name.
+      json_schema:
+        type: string
+        maxLength: 120
+        minLength: 1
+        title: Name
+        description: Project name.
+      required: true
+    description:
+      json_schema:
+        type: string
+        maxLength: 2000
+        title: Description
+        default: ''
+  example:
+    name: example
+  requires_approval: true
+  tags:
+  - projects
+- name: get_project
+  description: Get a project
+  risk: read
+  routes:
+  - operation_id: get_project
+    method: GET
+    path: /projects/{project_id}
+    params:
+      project_id:
+        location: path
+        required: true
+  params:
+    project_id:
+      json_schema:
+        type: string
+        title: Project Id
+      required: true
+  example:
+    project_id: '123'
+  tags:
+  - projects
+- name: update_project
+  description: Rename, archive or reactivate a project
+  risk: write
+  routes:
+  - operation_id: update_project
+    method: PATCH
+    path: /projects/{project_id}
+    params:
+      project_id:
+        location: path
+        required: true
+      name:
+        location: body
+      status:
+        location: body
+  params:
+    project_id:
+      json_schema:
+        type: string
+        title: Project Id
+      required: true
+    name:
+      json_schema:
+        anyOf:
+        - type: string
+          maxLength: 120
+          minLength: 1
+        - type: 'null'
+        title: Name
+    status:
+      description: Archive a finished project, or reactivate it.
+      json_schema:
+        anyOf:
+        - type: string
+          enum:
+          - active
+          - archived
+        - type: 'null'
+        title: Status
+        description: Archive a finished project, or reactivate it.
+  example:
+    project_id: '123'
+  requires_approval: true
+  tags:
+  - projects
+- name: delete_project
+  description: Delete a project with all its tasks and comments. Permanent. There is no undo.
+  risk: destructive
+  routes:
+  - operation_id: delete_project
+    method: DELETE
+    path: /projects/{project_id}
+    params:
+      project_id:
+        location: path
+        required: true
+  params:
+    project_id:
+      json_schema:
+        type: string
+        title: Project Id
+      required: true
+  example:
+    project_id: '123'
+  requires_approval: true
+  tags:
+  - projects
+- name: list_tasks
+  description: Find tasks across projects
+  risk: read
+  routes:
+  - operation_id: list_tasks
+    method: GET
+    path: /tasks
+    params:
+      project_id:
+        location: query
+      status:
+        location: query
+      assignee:
+        location: query
+      overdue:
+        location: query
+      limit:
+        location: query
+  params:
+    project_id:
+      description: Only tasks in this project.
+      json_schema:
+        anyOf:
+        - type: string
+        - type: 'null'
+        description: Only tasks in this project.
+        title: Project Id
+    status:
+      json_schema:
+        anyOf:
+        - enum:
+          - todo
+          - in_progress
+          - done
+          type: string
+        - type: 'null'
+        title: Status
+    assignee:
+      description: Member handle.
+      json_schema:
+        anyOf:
+        - type: string
+        - type: 'null'
+        description: Member handle.
+        title: Assignee
+    overdue:
+      description: Only open tasks past their due date.
+      json_schema:
+        type: boolean
+        description: Only open tasks past their due date.
+        default: false
+        title: Overdue
+    limit:
+      json_schema:
+        type: integer
+        maximum: 200
+        minimum: 1
+        default: 50
+        title: Limit
+  tags:
+  - tasks
+- name: create_task
+  description: Create a task in a project
+  risk: write
+  routes:
+  - operation_id: create_task
+    method: POST
+    path: /projects/{project_id}/tasks
+    params:
+      project_id:
+        location: path
+        required: true
+      title:
+        location: body
+        required: true
+      description:
+        location: body
+      assignee:
+        location: body
+      due_date:
+        location: body
+  params:
+    project_id:
+      json_schema:
+        type: string
+        title: Project Id
+      required: true
+    title:
+      json_schema:
+        type: string
+        maxLength: 200
+        minLength: 1
+        title: Title
+      required: true
+    description:
+      json_schema:
+        type: string
+        maxLength: 4000
+        title: Description
+        default: ''
+    assignee:
+      description: Member handle.
+      json_schema:
+        anyOf:
+        - type: string
+        - type: 'null'
+        title: Assignee
+        description: Member handle.
+    due_date:
+      json_schema:
+        anyOf:
+        - type: string
+          format: date
+        - type: 'null'
+        title: Due Date
+  example:
+    project_id: '123'
+    title: string
+  requires_approval: true
+  tags:
+  - tasks
+- name: get_task
+  description: Get a task
+  risk: read
+  routes:
+  - operation_id: get_task
+    method: GET
+    path: /tasks/{task_id}
+    params:
+      task_id:
+        location: path
+        required: true
+  params:
+    task_id:
+      json_schema:
+        type: string
+        title: Task Id
+      required: true
+  example:
+    task_id: '123'
+  tags:
+  - tasks
+- name: update_task
+  description: Update a task
+  risk: write
+  routes:
+  - operation_id: update_task
+    method: PATCH
+    path: /tasks/{task_id}
+    params:
+      task_id:
+        location: path
+        required: true
+      title:
+        location: body
+      status:
+        location: body
+      assignee:
+        location: body
+      due_date:
+        location: body
+  params:
+    task_id:
+      json_schema:
+        type: string
+        title: Task Id
+      required: true
+    title:
+      json_schema:
+        anyOf:
+        - type: string
+          maxLength: 200
+          minLength: 1
+        - type: 'null'
+        title: Title
+    status:
+      json_schema:
+        anyOf:
+        - type: string
+          enum:
+          - todo
+          - in_progress
+          - done
+        - type: 'null'
+        title: Status
+    assignee:
+      json_schema:
+        anyOf:
+        - type: string
+        - type: 'null'
+        title: Assignee
+    due_date:
+      json_schema:
+        anyOf:
+        - type: string
+          format: date
+        - type: 'null'
+        title: Due Date
+  example:
+    task_id: '123'
+  requires_approval: true
+  tags:
+  - tasks
+- name: delete_task
+  description: Delete a task
+  risk: destructive
+  routes:
+  - operation_id: delete_task
+    method: DELETE
+    path: /tasks/{task_id}
+    params:
+      task_id:
+        location: path
+        required: true
+  params:
+    task_id:
+      json_schema:
+        type: string
+        title: Task Id
+      required: true
+  example:
+    task_id: '123'
+  requires_approval: true
+  tags:
+  - tasks
+- name: list_comments
+  description: List a task's comments
+  risk: read
+  routes:
+  - operation_id: list_comments
+    method: GET
+    path: /tasks/{task_id}/comments
+    params:
+      task_id:
+        location: path
+        required: true
+  params:
+    task_id:
+      json_schema:
+        type: string
+        title: Task Id
+      required: true
+  example:
+    task_id: '123'
+  tags:
+  - comments
+- name: add_comment
+  description: Comment on a task
+  risk: write
+  routes:
+  - operation_id: add_comment
+    method: POST
+    path: /tasks/{task_id}/comments
+    params:
+      task_id:
+        location: path
+        required: true
+      body:
+        location: body
+        required: true
+      author:
+        location: body
+        required: true
+  params:
+    task_id:
+      json_schema:
+        type: string
+        title: Task Id
+      required: true
+    body:
+      json_schema:
+        type: string
+        maxLength: 4000
+        minLength: 1
+        title: Body
+      required: true
+    author:
+      description: 'Who wrote the comment: a member handle or an integration name.'
+      json_schema:
+        type: string
+        title: Author
+        description: 'Who wrote the comment: a member handle or an integration name.'
+      required: true
+  example:
+    task_id: '123'
+    body: string
+    author: string
+  requires_approval: true
+  tags:
+  - comments
+dropped: []
