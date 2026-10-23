@@ -1,0 +1,20 @@
+name = "incident-response-agent"
+version = "1.0.0"
+description = "On-call agent: an alert wakes it, it follows the runbook, risky fixes wait for a person"
+main = "main.py"
+python_path = ["."]
+
+[scripts]
+demo = "promptise run demo.py"
+demo-deny = "promptise run demo.py -- --deny"
+demo-trace = "promptise run --devtools demo.py"
+alert = "promptise run scripts/fire_alert.py"
+dev = "promptise run --devtools"
+test = "pytest -q"
+
+[env]
+files = [".env"]
+vars = { INCIDENT_AGENT_MODEL = "openai:gpt-5-mini", ALERT_WEBHOOK_PORT = "9095" }
+
+[dev]
+observe = "full"

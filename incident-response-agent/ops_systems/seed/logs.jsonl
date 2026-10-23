@@ -1,0 +1,25 @@
+{"minutes_ago": 29, "service": "checkout-service", "level": "INFO", "message": "POST /v1/checkout 200 in 212ms", "pod": "checkout-7d9f-2"}
+{"minutes_ago": 27, "service": "cart-service", "level": "INFO", "message": "GET /v1/cart 200 in 41ms", "pod": "cart-5c4b-6"}
+{"minutes_ago": 24, "service": "checkout-service", "level": "WARN", "message": "Slow call to payments-api /v2/authorize: 1310ms", "pod": "checkout-7d9f-4"}
+{"minutes_ago": 22, "service": "payments-api", "level": "INFO", "message": "POST /v2/authorize 200 in 1290ms", "pod": "payments-66d1-1"}
+{"minutes_ago": 20, "service": "cart-service", "level": "ERROR", "message": "Redis GET promo:SPRING26 timed out after 50ms, served from source", "pod": "cart-5c4b-3"}
+{"minutes_ago": 15, "service": "checkout-service", "level": "INFO", "message": "Starting checkout-service v2.14.0 (commit 9f3c2ab)", "pod": "checkout-8a21-1"}
+{"minutes_ago": 15, "service": "checkout-service", "level": "INFO", "message": "Config loaded: PAYMENTS_TIMEOUT_MS=800 (previous default 3000)", "pod": "checkout-8a21-1"}
+{"minutes_ago": 14, "service": "checkout-service", "level": "ERROR", "message": "PaymentGatewayClient: TimeoutError calling payments-api /v2/authorize after 800ms", "pod": "checkout-8a21-1"}
+{"minutes_ago": 14, "service": "checkout-service", "level": "ERROR", "message": "POST /v1/checkout 502: payment authorization timed out", "pod": "checkout-8a21-1"}
+{"minutes_ago": 13, "service": "checkout-service", "level": "ERROR", "message": "PaymentGatewayClient: TimeoutError calling payments-api /v2/authorize after 800ms", "pod": "checkout-8a21-3"}
+{"minutes_ago": 13, "service": "payments-api", "level": "INFO", "message": "POST /v2/authorize 200 in 1340ms", "pod": "payments-66d1-2"}
+{"minutes_ago": 12, "service": "checkout-service", "level": "ERROR", "message": "PaymentGatewayClient: TimeoutError calling payments-api /v2/authorize after 800ms", "pod": "checkout-8a21-5"}
+{"minutes_ago": 12, "service": "checkout-service", "level": "ERROR", "message": "POST /v1/checkout 502: payment authorization timed out", "pod": "checkout-8a21-5"}
+{"minutes_ago": 11, "service": "cart-service", "level": "INFO", "message": "GET /v1/cart 200 in 39ms", "pod": "cart-5c4b-1"}
+{"minutes_ago": 10, "service": "checkout-service", "level": "ERROR", "message": "PaymentGatewayClient: TimeoutError calling payments-api /v2/authorize after 800ms", "pod": "checkout-8a21-2"}
+{"minutes_ago": 10, "service": "checkout-service", "level": "WARN", "message": "Retry budget exhausted for payments-api, failing fast", "pod": "checkout-8a21-2"}
+{"minutes_ago": 9, "service": "checkout-service", "level": "ERROR", "message": "POST /v1/checkout 502: payment authorization timed out", "pod": "checkout-8a21-4"}
+{"minutes_ago": 8, "service": "payments-api", "level": "WARN", "message": "Client checkout-service closed connection before response (499)", "pod": "payments-66d1-3"}
+{"minutes_ago": 7, "service": "checkout-service", "level": "ERROR", "message": "PaymentGatewayClient: TimeoutError calling payments-api /v2/authorize after 800ms", "pod": "checkout-8a21-6"}
+{"minutes_ago": 6, "service": "checkout-service", "level": "ERROR", "message": "PaymentGatewayClient: TimeoutError calling payments-api /v2/authorize after 800ms", "pod": "checkout-8a21-1"}
+{"minutes_ago": 5, "service": "cart-service", "level": "WARN", "message": "Promo cache hit ratio 0.71 below target 0.8", "pod": "cart-5c4b-2"}
+{"minutes_ago": 4, "service": "checkout-service", "level": "ERROR", "message": "POST /v1/checkout 502: payment authorization timed out", "pod": "checkout-8a21-3"}
+{"minutes_ago": 3, "service": "checkout-service", "level": "ERROR", "message": "PaymentGatewayClient: TimeoutError calling payments-api /v2/authorize after 800ms", "pod": "checkout-8a21-4"}
+{"minutes_ago": 2, "service": "payments-api", "level": "INFO", "message": "POST /v2/authorize 200 in 1270ms", "pod": "payments-66d1-1"}
+{"minutes_ago": 1, "service": "checkout-service", "level": "ERROR", "message": "PaymentGatewayClient: TimeoutError calling payments-api /v2/authorize after 800ms", "pod": "checkout-8a21-5"}

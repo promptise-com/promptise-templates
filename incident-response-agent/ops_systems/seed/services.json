@@ -1,0 +1,38 @@
+{
+  "checkout-service": {
+    "team": "payments",
+    "replicas": 6,
+    "current_version": "v2.14.0",
+    "metrics": {
+      "error_rate": {"unit": "%", "baseline": 0.4, "incident": 11.8, "incident_since_minutes_ago": 14, "fixed_by_version": "v2.13.4"},
+      "latency_p95_ms": {"unit": "ms", "baseline": 240, "incident": 930, "incident_since_minutes_ago": 14, "fixed_by_version": "v2.13.4"},
+      "request_rate": {"unit": "req/s", "baseline": 410},
+      "cpu": {"unit": "%", "baseline": 38},
+      "memory": {"unit": "%", "baseline": 52}
+    }
+  },
+  "payments-api": {
+    "team": "payments",
+    "replicas": 4,
+    "current_version": "v8.0.3",
+    "metrics": {
+      "error_rate": {"unit": "%", "baseline": 0.2},
+      "latency_p95_ms": {"unit": "ms", "baseline": 1450},
+      "request_rate": {"unit": "req/s", "baseline": 180},
+      "cpu": {"unit": "%", "baseline": 44},
+      "memory": {"unit": "%", "baseline": 61}
+    }
+  },
+  "cart-service": {
+    "team": "storefront",
+    "replicas": 8,
+    "current_version": "v5.2.1",
+    "metrics": {
+      "error_rate": {"unit": "%", "baseline": 0.3},
+      "latency_p95_ms": {"unit": "ms", "baseline": 120},
+      "request_rate": {"unit": "req/s", "baseline": 950},
+      "cpu": {"unit": "%", "baseline": 51},
+      "memory": {"unit": "%", "baseline": 67}
+    }
+  }
+}

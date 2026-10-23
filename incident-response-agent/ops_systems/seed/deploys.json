@@ -1,0 +1,10 @@
+[
+  {"service": "checkout-service", "version": "v2.14.0", "previous_version": "v2.13.4", "minutes_ago": 15,
+   "author": "dana.k", "commit": "9f3c2ab", "change": "Move the payments client to the new config loader"},
+  {"service": "cart-service", "version": "v5.2.1", "previous_version": "v5.2.0", "minutes_ago": 190,
+   "author": "li.wen", "commit": "41e07d5", "change": "Cache promo lookups for 30 seconds"},
+  {"service": "payments-api", "version": "v8.0.3", "previous_version": "v8.0.2", "minutes_ago": 1510,
+   "author": "sam.o", "commit": "c88d1e0", "change": "Upgrade the card network SDK"},
+  {"service": "checkout-service", "version": "v2.13.4", "previous_version": "v2.13.3", "minutes_ago": 2890,
+   "author": "dana.k", "commit": "77ab210", "change": "Fix rounding of tax lines"}
+]

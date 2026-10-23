@@ -1,0 +1,8 @@
+.venv/
+.env
+var/
+.promptise/
+__pycache__/
+.pytest_cache/
+reports/
+.ruff_cache/
