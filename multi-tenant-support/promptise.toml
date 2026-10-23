@@ -1,0 +1,17 @@
+name = "multi-tenant-support"
+version = "0.1.0"
+description = "One support agent for many customer companies, with per-tenant data, memory, permissions and quotas"
+main = "main.py"
+
+[scripts]
+demo = "python main.py --offline"   # offline, no API key
+dev = "promptise run --devtools"     # real model, with live traces
+backend = "python -m support_desk.backend"
+test = "pytest -q"
+
+[env]
+files = [".env"]
+vars = { SUPPORT_MODEL = "openai:gpt-5-mini" }
+
+[dev]
+observe = "standard"

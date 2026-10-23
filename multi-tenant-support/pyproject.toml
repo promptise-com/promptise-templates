@@ -1,0 +1,14 @@
+# Dependencies are in requirements.txt. This file only configures pytest.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 110
+extend-exclude = [".venv"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["agent", "conftest", "demo", "main", "support_desk"]

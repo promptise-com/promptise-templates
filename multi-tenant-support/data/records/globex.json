@@ -1,0 +1,11 @@
+{
+  "tickets": [
+    {"ticket_id": "GLX-2201", "requester": "gina", "subject": "Thermostat shows E4 after rewiring", "status": "open", "priority": "high", "created": "2026-10-17", "last_update": "Asked the customer to check the C-wire connection."},
+    {"ticket_id": "GLX-2204", "requester": "gina", "subject": "Schedule resets after power cut", "status": "open", "priority": "normal", "created": "2026-10-20", "last_update": "Firmware 3.2.1 fix is rolling out this week."},
+    {"ticket_id": "GLX-2207", "requester": "alice", "subject": "Second thermostat for the upstairs zone", "status": "solved", "priority": "low", "created": "2026-10-05", "last_update": "Sent the multi-zone setup guide."}
+  ],
+  "orders": [
+    {"order_id": "GX-7003", "customer": "gina", "items": ["Thermo One smart thermostat"], "total_eur": 189.0, "status": "delivered", "placed": "2026-10-01", "carrier": "UPS", "tracking": "1Z999AA10123456784"},
+    {"order_id": "GX-7011", "customer": "alice", "items": ["Thermo One room sensor"], "total_eur": 39.0, "status": "shipped", "placed": "2026-10-19", "carrier": "UPS", "tracking": "1Z999AA10123459912"}
+  ]
+}

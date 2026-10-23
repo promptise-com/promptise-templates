@@ -1,0 +1,13 @@
+{
+  "tickets": [
+    {"ticket_id": "ACME-1041", "requester": "alice", "subject": "S2 vacuum stops after 10 minutes", "status": "open", "priority": "high", "created": "2026-10-14", "last_update": "Engineer asked for the error code on the base station display."},
+    {"ticket_id": "ACME-1042", "requester": "alice", "subject": "Replacement side brush not in the box", "status": "pending_customer", "priority": "normal", "created": "2026-10-18", "last_update": "Waiting for a photo of the packing slip."},
+    {"ticket_id": "ACME-1043", "requester": "ben", "subject": "App will not pair over 5 GHz Wi-Fi", "status": "open", "priority": "normal", "created": "2026-10-19", "last_update": "Suggested switching the router to a 2.4 GHz network."},
+    {"ticket_id": "ACME-1039", "requester": "alice", "subject": "Invoice address change", "status": "solved", "priority": "low", "created": "2026-09-30", "last_update": "Address updated on invoice INV-88231."}
+  ],
+  "orders": [
+    {"order_id": "AC-5001", "customer": "alice", "items": ["Sweepr S2 robot vacuum"], "total_eur": 449.0, "status": "delivered", "placed": "2026-09-02", "carrier": "DHL", "tracking": "JD0146000034561"},
+    {"order_id": "AC-5017", "customer": "alice", "items": ["S2 side brush (2-pack)", "S2 HEPA filter"], "total_eur": 34.9, "status": "shipped", "placed": "2026-10-16", "carrier": "DHL", "tracking": "JD0146000039902"},
+    {"order_id": "AC-5020", "customer": "ben", "items": ["Sweepr S2 robot vacuum"], "total_eur": 449.0, "status": "processing", "placed": "2026-10-21", "carrier": null, "tracking": null}
+  ]
+}
